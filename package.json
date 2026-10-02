@@ -1,0 +1,38 @@
+{
+  "name": "runningdo",
+  "private": true,
+  "version": "1.3.0",
+  "type": "module",
+  "description": "一张纸上的倒计时与日程 · macOS 桌面应用",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "smoke": "node scripts/smoke-build.mjs && node node_modules/.smoke/pickers.mjs && node node_modules/.smoke/delete.mjs && node node_modules/.smoke/drawer.mjs && node node_modules/.smoke/font.mjs && node node_modules/.smoke/crown.mjs && node node_modules/.smoke/milestones.mjs && node node_modules/.smoke/drawer-countdown.mjs && node node_modules/.smoke/calendar-header.mjs && node node_modules/.smoke/card.mjs && node node_modules/.smoke/agenda.mjs && node node_modules/.smoke/v13.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm smoke",
+    "tauri": "tauri",
+    "app": "tauri dev"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.0",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.49.0",
+    "lunar-typescript": "^1.8.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

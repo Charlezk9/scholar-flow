@@ -1,0 +1,140 @@
+/* ==========================================================================
+   RunningDO · Design Tokens
+   全部数值采样自 docs/ref-img/，见 docs/DESIGN.md
+   主题接口：新增主题只需复制一份 [data-theme="xxx"] 覆盖同名变量，
+             组件层零改动（PRD SET-05）
+   ========================================================================== */
+
+:root,
+[data-theme="xuan"] {
+  /* ---- 纸面 ---- */
+  --paper-canvas: #f0e9e2;
+  --paper-surface: #f6f2eb;
+  --paper-panel: #f5f1ea;
+  --paper-panel-alt: #f1ece5;
+  --paper-sunken: #f0eae0;
+  --paper-note: #f8eccc;
+  --paper-note-soft: #f8f0dc;
+  --paper-raise: #fdfbf7;
+
+  /* ---- 墨 ---- */
+  --ink-1: #241f1c;
+  --ink-2: #5c554d;
+  --ink-3: #9c9488;
+  --ink-4: #b8b0a4;
+  --ink-invert: #fdfbf7;
+
+  /* ---- 朱砂（主强调） ---- */
+  --cinnabar: #a2362c;
+  --cinnabar-deep: #8f2c22;
+  --cinnabar-soft: #c0554a;
+  --cinnabar-tint: #f5e2de;
+
+  /* ---- 线 / 影 ---- */
+  --line-strong: #e4dcd4;
+  --line: #eae4d8;
+  --line-soft: #efeae0;
+  --shadow-paper: 0 1px 3px rgba(90, 70, 50, 0.08);
+  --shadow-card: 0 1px 2px rgba(90, 70, 50, 0.07), 0 4px 12px rgba(90, 70, 50, 0.05);
+  --shadow-float: 0 8px 28px rgba(90, 70, 50, 0.14);
+
+  /* ---- 事件色板（与 src/lib/api.ts COLOR_META 对应） ---- */
+  --ev-cinnabar-fill: #f0d8d2;
+  --ev-cinnabar-line: #c0554a;
+  --ev-cinnabar-text: #8f2c22;
+  --ev-ochre-fill: #f0e0c8;
+  --ev-ochre-line: #c98a45;
+  --ev-ochre-text: #8a5a22;
+  --ev-indigo-fill: #d8e0e8;
+  --ev-indigo-line: #4578b2;
+  --ev-indigo-text: #2c5580;
+  --ev-pine-fill: #dde6d8;
+  --ev-pine-line: #6f9464;
+  --ev-pine-text: #44603c;
+  --ev-sandalfig-fill: #e2dce8;
+  --ev-sandalfig-line: #8b76a8;
+  --ev-sandalfig-text: #5a4a73;
+  --ev-rouge-fill: #f3dce0;
+  --ev-rouge-line: #c4707f;
+  --ev-rouge-text: #8a4351;
+  --ev-smoke-fill: #e6e2da;
+  --ev-smoke-line: #9c9488;
+  --ev-smoke-text: #5c554d;
+
+  /* ---- 圆角 ---- */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+
+  /* ---- 间距 ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* ---- 字体（v1.1 · UI-18 统一为「SF Pro + 苹方」）----
+     顺序不可反：-apple-system 必须排在第一位，拉丁字母与数字才会走 SF Pro，
+     中文再落到 PingFang SC。若把 "PingFang SC" 写在前面，数字会用苹方自带的
+     拉丁字形，tabular-nums 可能失效 —— 表现就是秒在跳、整行宽度跟着抖。
+     字重注意：PingFang SC 没有 Bold（写 700 会被合成假粗，笔画发糊），
+     需要「重」时一律用 600（Semibold）；「中」用 500（Medium）真实存在。 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Helvetica Neue", Arial, sans-serif;
+  /* 展示级文字（标题、大数字）：同一栈，留作后续单独调字距/字重的挂点 */
+  --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Helvetica Neue", Arial, sans-serif;
+  /* 会跳秒/跳数的位置：必须同时声明 font-variant-numeric: tabular-nums */
+  --font-num: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Helvetica Neue", Arial, sans-serif;
+  /* 过渡别名：v1.1 期间保留（值等同 --font-ui），v1.2 删除 */
+  --font-serif: var(--font-ui);
+  --font-sans: var(--font-ui);
+
+  /* ---- 字号缩放 ----
+     1 = 标准。全部 font-size 都写成 calc(Npx * var(--font-scale))；
+     凡是「承载文字」的固定高度一律改用 min-height + --fs-step，
+     这样放大字号时是元素自己长高，而不是把文字裁掉。 */
+  --font-scale: 1;
+  --fs-step: calc(var(--font-scale) - 1);
+
+  /* ---- 尺寸：只有「必须跟着长」的结构才缩放 ----
+     顶栏高、左栏宽、抽屉宽、月视图行高、时间轴行高需要随字号变化，
+     否则大字会挤爆或裁切。间距（--sp-*）刻意保持恒定，避免整体位移。 */
+  --topbar-h: calc(52px + var(--fs-step) * 22px);
+  --traffic-safe: 78px;
+  --sidebar-w: calc(372px + var(--fs-step) * 110px); /* v1.1 · UI-19：340 → 372（里程碑行需要横向空间） */
+  --drawer-w: calc(480px + var(--fs-step) * 150px);
+  --settings-nav-w: calc(200px + var(--fs-step) * 60px);
+  /* v1.1 · UI-21：周/日视图左侧的迷你月历栏宽。
+     原来是写死的 180px，是项目里唯一没随字号缩放的尺寸 ——
+     字号一大，7 列日格就抢不到位置，直接溢出气泡。 */
+  --rail-w: calc(180px + var(--fs-step) * 44px);
+  --hour-h: calc(44px * var(--font-scale)); /* JS 会覆写成取整值，保证与时间轴计算一致 */
+  --wheel-h: calc(32px * var(--font-scale));
+  --row-h: calc(94px + var(--fs-step) * 30px); /* 月视图每行最小高 */
+  --crown-h: calc(38px + var(--fs-step) * 16px); /* 标题栏下方的皇冠栏 */
+  --gutter: 16px;
+}
+
+/* 字号档位（无 JS 也能生效；JS 会把 --hour-h 覆写成取整值） */
+[data-font="sm"] {
+  --font-scale: 0.9;
+}
+[data-font="md"] {
+  --font-scale: 1;
+}
+[data-font="lg"] {
+  --font-scale: 1.15;
+}
+[data-font="xl"] {
+  --font-scale: 1.3;
+}
+
+/* 紧凑密度（设置项） */
+[data-density="compact"] {
+  --sp-3: 10px;
+  --sp-4: 13px;
+  --hour-h: calc(38px * var(--font-scale));
+}
