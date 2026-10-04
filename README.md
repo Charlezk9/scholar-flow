@@ -157,8 +157,9 @@ pnpm build
 | 卡片信息行 | `pnpm smoke` | 四种情形的文案（天级 / 全天 / 不足一天 / 已过期）、时分秒等宽、不再有「还有」与独立时钟行 |
 | 日历标题栏 | `pnpm smoke` | 标题不显示年份、窄窗短格式、菜单与分段控件、按钮不折行 |
 | 倒计时编辑抽屉 | `pnpm smoke` | ⋯ → 编辑、字段预填、✕ 在左上、遮罩/Esc 关闭、删除走站内确认 |
-| 议程页 | `pnpm smoke` | 页面切换、快速添加、子项增删改勾、⋯ 菜单六项、安排到某天（浮层 + 落库 + 归档 + Toast）、已完成区、接下来 7 天、级联删除 |
-| 数据层 | `cargo test` | 倒计时 / 里程碑 / 议程事项与子项 的 CRUD 与排序、皇冠互斥、级联删除、`schedule_agenda_item` 事务、备份 v3、v1.0/v1.1 老库升级 |
+| 议程页 | `pnpm smoke` | 页面切换、快速添加、子项增删改勾、⋯ 菜单六项、安排到某天（浮层 + 落库 + 归档 + Toast）、已完成区、不显示七天预览（含旧设置归一）、级联删除 |
+| 日视图日常安排 | `pnpm smoke` | 四个固定空块、类别浮层的建议／自定义／失败回滚、双击新建不重复加滚动偏移、并发事件泳道、日期隔离与查询失败重试 |
+| 数据层 | `cargo test` | 倒计时 / 里程碑 / 议程事项与子项 的 CRUD 与排序、皇冠互斥、级联删除、`schedule_agenda_item` 事务、日常安排 CRUD、备份 v4（含迁移前按旧 schema 的兜底）、v1.0/v1.1/v1.2 老库升级 |
 
 ### 被测试抓住的真实事故
 
@@ -230,17 +231,19 @@ RunningDO/
 ├─ docs/
 │  ├─ DEVLOG.md                 # 开发日志（过程视角）
 │  ├─ v0/{PRD.md, DESIGN.md}    # 需求与设计规范（持续更新）
-│  ├─ v1/                       # 各版计划与发布说明（v1.0 / v1.1 / v1.2）
+│  ├─ v1/                       # 各版计划与发布说明（v1.0 – v1.3）
 │  └─ ref-img/                  # 6 张设计参考图
 ├─ src/                        # 前端
 │  ├─ components/              # 顶栏 / 皇冠栏 / 议程页 / 左栏 / 三种日历视图 / 抽屉 / 设置
-│  │  ├─ AgendaPage.tsx        # 议程页（待办池 + 安排到某天 + 接下来 7 天）
+│  │  ├─ AgendaPage.tsx        # 议程页（两列便签：正文 + 待办，安排到某天）
+│  │  ├─ RoutineColumn.tsx     # 日视图左栏：四个固定空块与类别
 │  │  ├─ Checklist.tsx         # 通用清单（里程碑与议程子项共用）
 │  │  ├─ Collapse.tsx          # 展开/收起动效容器（禁 transform / 禁 grid-rows 过渡）
 │  │  └─ CountdownDrawer.tsx   # 倒计时编辑抽屉
 │  ├─ domain/
 │  │  ├─ calendar.ts           # 日历引擎：网格、泳道排布、按天归集
-│  │  └─ agenda.ts             # 议程纯逻辑：排序、完成度、未完成子项
+│  │  ├─ agenda.ts             # 议程纯逻辑：排序、完成度、未完成子项
+│  │  └─ routine.ts            # 日常安排纯逻辑：固定时段、类别校验、时间轴几何
 │  ├─ lib/
 │  │  ├─ api.ts                # Tauri invoke 封装（浏览器下自动降级）
 │  │  ├─ date.ts               # 本地日期语义工具
@@ -325,7 +328,7 @@ RunningDO/
 └─ runningdo-backup-YYYYMMDD-HHMMSS.json   # 手动导出；升级新增表前会自动落一份兜底
 ```
 
-备份格式当前为 `version: 4`（新增 `dailyRoutineSlots`；v1 无里程碑，v2 无议程数据，v3 无日常安排）。JSON 恢复尚未实现。
+备份格式当前为 `version: 4`（新增 `dailyRoutineSlots`；v1 无里程碑，v2 无议程数据）。当前代码导出的 JSON **恒带 `dailyRoutineSlots` 键**，迁移前的兜底备份按旧 schema 标 `version: 3`，该键为空数组。JSON 恢复尚未实现。
 
 ---
 
