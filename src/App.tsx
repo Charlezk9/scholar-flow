@@ -6,6 +6,7 @@ import CalendarHeader from "./components/CalendarHeader";
 import MonthView from "./components/MonthView";
 import WeekView from "./components/WeekView";
 import AgendaPage from "./components/AgendaPage";
+import LiteraturePage from "./components/LiteraturePage";
 import EventDrawer from "./components/EventDrawer";
 import CountdownDrawer from "./components/CountdownDrawer";
 import SettingsPage from "./components/SettingsPage";
@@ -108,6 +109,8 @@ export default function App() {
         <SettingsPage />
       ) : page === "agenda" ? (
         <AgendaPage />
+      ) : page === "literature" ? (
+        <LiteraturePage />
       ) : (
         <div className="body">
           <CountdownPanel />

@@ -123,7 +123,7 @@ export interface ConfirmRequest {
 
 interface Store {
   ready: boolean;
-  page: "calendar" | "agenda" | "settings";
+  page: "calendar" | "agenda" | "literature" | "settings";
   view: ViewMode;
   cursor: string;
   selected: string;
@@ -158,7 +158,7 @@ interface Store {
   dialog: ConfirmRequest | null;
 
   init: () => Promise<void>;
-  setPage: (p: "calendar" | "agenda" | "settings") => void;
+  setPage: (p: "calendar" | "agenda" | "literature" | "settings") => void;
   setView: (v: ViewMode) => void;
   goto: (iso: string) => void;
   shift: (dir: -1 | 1) => void;

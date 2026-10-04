@@ -24,6 +24,8 @@ await build({
         card: "src/__smoke__/card.smoke.tsx",
         agenda: "src/__smoke__/agenda.smoke.tsx",
         v13: "src/__smoke__/v13.smoke.tsx",
+        literature: "src/__smoke__/literature.smoke.tsx",
+        reading: "src/__smoke__/reading.smoke.tsx",
       },
       output: { entryFileNames: "[name].mjs", format: "esm" },
     },

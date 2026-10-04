@@ -462,11 +462,11 @@ export default function SettingsPage() {
 
         {section === "data" ? (
           <div className="settings-cols">
-            <Card icon={<Database size={17} />} title="数据" desc="全部数据保存在本地 SQLite，不联网">
+            <Card icon={<Database size={17} />} title="数据" desc="数据保存在本地 SQLite；云提取需联网">
               <div className="card-row">
                 <span className="k">
                   <span className="name">手动备份</span>
-                  <span className="sub">导出为 JSON 文件（含倒计时、里程碑、事件、议程、日常安排与设置）</span>
+                  <span className="sub">导出 JSON（含文献元数据与标签）；不含附件与提取稿，迁移时请一并拷贝 files/papers 目录</span>
                 </span>
                 <button className="btn btn-outline btn-sm" onClick={() => void doBackup()}>
                   <RefreshCw size={13} />

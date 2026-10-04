@@ -4,3 +4,11 @@ src-tauri/target/
 src-tauri/gen/schemas/
 .DS_Store
 *.log
+.conda/
+.env
+# 项目环境、缓存与私密配置
+.pnpm-store/
+__pycache__/
+*.pyc
+secrets.env
+:memory:.ses

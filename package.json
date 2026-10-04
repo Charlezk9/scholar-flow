@@ -1,7 +1,7 @@
 {
   "name": "runningdo",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.4.0",
   "type": "module",
   "description": "一张纸上的倒计时与日程 · macOS 桌面应用",
   "scripts": {
@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",
-    "smoke": "node scripts/smoke-build.mjs && node node_modules/.smoke/pickers.mjs && node node_modules/.smoke/delete.mjs && node node_modules/.smoke/drawer.mjs && node node_modules/.smoke/font.mjs && node node_modules/.smoke/crown.mjs && node node_modules/.smoke/milestones.mjs && node node_modules/.smoke/drawer-countdown.mjs && node node_modules/.smoke/calendar-header.mjs && node node_modules/.smoke/card.mjs && node node_modules/.smoke/agenda.mjs && node node_modules/.smoke/v13.mjs",
+    "smoke": "node scripts/smoke-build.mjs && node node_modules/.smoke/pickers.mjs && node node_modules/.smoke/delete.mjs && node node_modules/.smoke/drawer.mjs && node node_modules/.smoke/font.mjs && node node_modules/.smoke/crown.mjs && node node_modules/.smoke/milestones.mjs && node node_modules/.smoke/drawer-countdown.mjs && node node_modules/.smoke/calendar-header.mjs && node node_modules/.smoke/card.mjs && node node_modules/.smoke/agenda.mjs && node node_modules/.smoke/v13.mjs && node node_modules/.smoke/literature.mjs && node node_modules/.smoke/reading.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm smoke",
     "tauri": "tauri",
     "app": "tauri dev"
@@ -18,10 +18,16 @@
   "dependencies": {
     "@tauri-apps/api": "^2.12.0",
     "date-fns": "^4.4.0",
+    "katex": "^0.19.0",
     "lucide-react": "^1.49.0",
     "lunar-typescript": "^1.8.6",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

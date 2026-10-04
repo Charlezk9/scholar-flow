@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { CalendarDays, ListTodo, Settings, Sun } from "lucide-react";
+import { CalendarDays, Library, ListTodo, Settings, Sun } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { formatFullDate } from "../lib/date";
 import { useNow } from "../lib/tick";
@@ -63,6 +63,14 @@ export default function TopBar() {
       >
         <ListTodo size={15} />
         议程
+      </button>
+      <button
+        className={`ghost-btn ${page === "literature" ? "is-active" : ""}`}
+        onClick={() => setPage("literature")}
+        title="论文、教材与提炼出的 Markdown"
+      >
+        <Library size={15} />
+        文献
       </button>
       <button
         className={`ghost-btn ${page === "settings" ? "is-active" : ""}`}

@@ -1,0 +1,30 @@
+{
+  "engine": "glm",
+  "engine_version": "glm-5.3-flash",
+  "quality": {
+    "chars": 2735,
+    "pages": 1,
+    "charsPerPage": 2735.0,
+    "cidResidue": 0,
+    "cjkRatio": 0.0,
+    "looksScanned": false
+  },
+  "suggested": {
+    "title": "Attention Is All You Need",
+    "authors": "Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, Illia Polosukhin",
+    "year": "2017",
+    "venue": "31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA",
+    "doi": ""
+  },
+  "usage": {
+    "promptTokens": 4981,
+    "completionTokens": 695,
+    "pages": 1,
+    "seconds": 11.719,
+    "estimatedCost": 0.0059308,
+    "currency": "CNY",
+    "pricingSource": "https://docs.bigmodel.cn/cn/guide/start/pricing.md (2026-10-04)",
+    "totalSeconds": 11.912,
+    "costKind": "estimate; excludes discounts/cache; not actual invoice"
+  }
+}

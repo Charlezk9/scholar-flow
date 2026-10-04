@@ -2,13 +2,15 @@
 
 > 一张纸上的科研学习工作台 · macOS 桌面应用
 
-日程与倒计时之外，逐步承载科研学习需要的资料（v1.4 起：文献）。日历页左侧是倒计时、右侧是日历；纸张质感，本地存储，完全离线。
+日程与倒计时之外，逐步承载科研学习需要的资料（v1.4 起：文献）。日历页左侧是倒计时、右侧是日历；纸张质感，本地存储；文献支持可选云端提取。
 
 | 文档 | 位置 | 说明 |
 | --- | --- | --- |
 | **开发日志** | [`docs/DEVLOG.md`](docs/DEVLOG.md) | **过程视角**：每次会话做了什么、被什么绊住、留下了什么尾巴 |
 | **产品需求** | [`docs/v0/PRD.md`](docs/v0/PRD.md) | **唯一活规格**：需求清单 + 验收标准 + §5.0 状态总览。**新功能先在 PRD 拿 ID 立项，再写计划**（规则见 PRD §0） |
+| **v1.4 施工图** | [`docs/v1/PLAN-v1.4.md`](docs/v1/PLAN-v1.4.md) | 文献模块：数据模型、命令清单、提取管线（内建快线 + 云 OCR）、12 项已确认决议与实测记录 |
 | 设计规范 | [`docs/v0/DESIGN.md`](docs/v0/DESIGN.md) | Design Tokens 与组件规格（含 §5.1b 皇冠栏、§5.3 卡片、§5.12 议程页） |
+| **v1.4 发布说明** | [`docs/v1/RELEASE-NOTES-v1.4.md`](docs/v1/RELEASE-NOTES-v1.4.md) | 文献管理、阅读与提取、实测和限制 |
 | **v1.3 发布说明** | [`docs/v1/RELEASE-NOTES-v1.3.md`](docs/v1/RELEASE-NOTES-v1.3.md) | 两列便签、日常安排双栏、迁移与验证 |
 | v1.3 计划 | [`docs/v1/PLAN-v1.3.md`](docs/v1/PLAN-v1.3.md) | Q1–Q7 决议、实施与验收 |
 | **v1.2 发布说明** | [`docs/v1/RELEASE-NOTES-v1.2.md`](docs/v1/RELEASE-NOTES-v1.2.md) | 议程页重定义：改动、迁移、测试、限制 |
@@ -23,6 +25,7 @@
 
 | 版本 | 日期 | 主题 | 详情 |
 | --- | --- | --- | --- |
+| **v1.4.0** | 2026-10-04 | 文献管理、PDF / Markdown 阅读与提取 | [发布说明](docs/v1/RELEASE-NOTES-v1.4.md) |
 | **v1.3.0** | 2026-10-02 | 两列便签议程 + 日视图固定时间块与双栏 | [发布说明](docs/v1/RELEASE-NOTES-v1.3.md) · [计划](docs/v1/PLAN-v1.3.md) |
 | **v1.2.0** | 2026-10-02 | 议程页重定义为「没有日期的待办池」（标题 + 子项，可安排到日历） | [发布说明](docs/v1/RELEASE-NOTES-v1.2.md) · [计划](docs/v1/PLAN-v1.2.md) |
 | **v1.1.0** | 2026-10-02 | 字体统一 / 里程碑 / 编辑抽屉 / 卡片精简 / 布局加固 | [计划](docs/v1/PLAN-v1.1.md) |
@@ -324,11 +327,11 @@ RunningDO/
 
 ```
 ~/Library/Application Support/com.charlezk9.runningdo/
-├─ runningdo.db                        # SQLite 主库（7 张表，含 agenda_* 与 daily_routine_slots）
+├─ runningdo.db                        # SQLite 主库（含日历、议程、日常安排与文献数据）
 └─ runningdo-backup-YYYYMMDD-HHMMSS.json   # 手动导出；升级新增表前会自动落一份兜底
 ```
 
-备份格式当前为 `version: 4`（新增 `dailyRoutineSlots`；v1 无里程碑，v2 无议程数据）。当前代码导出的 JSON **恒带 `dailyRoutineSlots` 键**，迁移前的兜底备份按旧 schema 标 `version: 3`，该键为空数组。备份为单向导出。
+备份格式当前为 `version: 5`，包含文献元数据、标签及关联，**不包含附件与提取稿**。附件与提取稿位于数据目录的 `files/papers/`，需另行备份。备份为单向导出。
 
 ---
 

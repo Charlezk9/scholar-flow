@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod library;
 mod models;
 
 use db::Db;
@@ -24,7 +25,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let db_path = dir.join("runningdo.db");
             let db = Db::open(db_path).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
-            app.manage(db);
+            app.manage(std::sync::Arc::new(db));
 
             // ---------- 菜单栏常驻（MAC-04） ----------
             let open_i = MenuItem::with_id(app, "open", "打开 RunningDO", true, None::<&str>)?;
@@ -99,6 +100,26 @@ pub fn run() {
             commands::set_setting,
             commands::export_json,
             commands::data_dir,
+            commands::list_library_nodes,
+            commands::save_library_node,
+            commands::delete_library_node,
+            commands::list_papers,
+            commands::save_paper,
+            commands::delete_paper,
+            commands::list_paper_files,
+            commands::import_paper_file,
+            commands::delete_paper_file,
+            commands::read_paper_file,
+            commands::list_paper_extracts,
+            commands::save_paper_extract,
+            commands::delete_paper_extract,
+            commands::read_paper_extract,
+            commands::list_tags,
+            commands::ensure_tag,
+            commands::literature_cloud_ready,
+            commands::list_paper_tags,
+            commands::set_paper_tag,
+            commands::extract_paper_markdown,
         ])
         .run(tauri::generate_context!())
         .expect("RunningDO 启动失败");

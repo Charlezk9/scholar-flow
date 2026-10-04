@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub struct Db {
-    conn: Mutex<Connection>,
-    dir: PathBuf,
+    pub(crate) conn: Mutex<Connection>,
+    pub(crate) dir: PathBuf,
 }
 
 fn validate_routine(date: &str, key: Option<&str>, category: Option<&str>) -> Result<(), String> {
@@ -79,7 +79,7 @@ fn b(v: bool) -> i64 {
     }
 }
 
-fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
+pub(crate) fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
     Ok(conn
         .query_row(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
@@ -258,6 +258,21 @@ impl Db {
             export_json_with(&conn, &self.dir, version)?;
         }
 
+        // v1.4 首次加文献模块的表：同样先落一份兜底（按当前 schema 标 version 4）。
+        let has_library_tables: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='library_nodes'",
+                [],
+                |_| Ok(true),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+            .unwrap_or(false);
+        if !has_library_tables && has_countdowns {
+            ensure_column(&conn, "countdowns", "crowned", "INTEGER NOT NULL DEFAULT 0")?;
+            export_json_with(&conn, &self.dir, 4)?;
+        }
+
         conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS countdowns (
@@ -356,6 +371,91 @@ impl Db {
         ensure_column(&conn, "events", "remind_minutes", "INTEGER")?;
         // 皇冠（P0，v0.1.x 补上）：全局唯一的「最重要」倒计时
         ensure_column(&conn, "countdowns", "crowned", "INTEGER NOT NULL DEFAULT 0")?;
+
+        // v1.4 · LIT-02 ~ LIT-08：文献模块。
+        // 与后续模块的迁移约定一致：先兜底备份（上面已做），再建表；外键靠 PRAGMA foreign_keys=ON。
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS library_nodes (
+                id         TEXT PRIMARY KEY,
+                parent_id  TEXT REFERENCES library_nodes(id) ON DELETE CASCADE,
+                name       TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 60),
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_library_nodes_parent ON library_nodes(parent_id, sort_order);
+
+            CREATE TABLE IF NOT EXISTS papers (
+                id         TEXT PRIMARY KEY,
+                node_id    TEXT REFERENCES library_nodes(id) ON DELETE SET NULL,
+                kind       TEXT NOT NULL CHECK(kind IN ('paper','textbook','magazine','other')),
+                title      TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200),
+                authors    TEXT,
+                year       INTEGER,
+                venue      TEXT,
+                doi        TEXT,
+                url        TEXT,
+                status     TEXT NOT NULL DEFAULT 'unread' CHECK(status IN ('unread','reading','read')),
+                note       TEXT,
+                extra      TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_papers_node ON papers(node_id);
+
+            CREATE TABLE IF NOT EXISTS paper_files (
+                id            TEXT PRIMARY KEY,
+                paper_id      TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+                role          TEXT NOT NULL DEFAULT 'main' CHECK(role IN ('main','supplement','slides','other')),
+                original_path TEXT,
+                rel_path      TEXT NOT NULL,
+                size          INTEGER,
+                sha256        TEXT,
+                missing       INTEGER NOT NULL DEFAULT 0,
+                created_at    TEXT NOT NULL,
+                updated_at    TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_paper_files_paper ON paper_files(paper_id);
+
+            CREATE TABLE IF NOT EXISTS paper_extracts (
+                id            TEXT PRIMARY KEY,
+                paper_id      TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+                file_id       TEXT REFERENCES paper_files(id) ON DELETE CASCADE,
+                engine        TEXT NOT NULL,
+                engine_version TEXT,
+                source_sha256 TEXT,
+                rel_path      TEXT,
+                status        TEXT NOT NULL CHECK(status IN ('queued','running','done','failed')),
+                pages         INTEGER,
+                chars         INTEGER,
+                quality       TEXT,
+                meta          TEXT,
+                error         TEXT,
+                created_at    TEXT NOT NULL,
+                updated_at    TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_paper_extracts_paper ON paper_extracts(paper_id);
+
+            -- 标题唯一（用户要求）：归一化 = trim + 大小写不敏感。
+            -- 用 IF NOT EXISTS；若历史库已存在重复标题，创建失败时忽略（代码层仍会拦截）。
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_title_unique
+                ON papers(lower(trim(title)));
+
+            CREATE TABLE IF NOT EXISTS tags (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE,
+                color      TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS paper_tags (
+                paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+                tag_id   TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+                PRIMARY KEY(paper_id, tag_id)
+            );
+            "#,
+        )
+        .map_err(|e| format!("建文献表失败: {e}"))?;
         Ok(())
     }
 
@@ -1223,7 +1323,7 @@ impl Db {
 
     pub fn export_json(&self) -> Result<String, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        export_json_with(&conn, &self.dir, 4)
+        export_json_with(&conn, &self.dir, 5)
     }
 }
 
@@ -1315,6 +1415,13 @@ fn export_json_with(conn: &Connection, dir: &Path, version: i64) -> Result<Strin
         "events": events,
         "settings": settings,
     });
+    // v1.4 · LIT：文献模块（表不存在时全为空数组，保证老库也能导出）
+    let mut payload = payload;
+    if let Some(obj) = payload.as_object_mut() {
+        for (k, v) in crate::library::library_payload(conn)? {
+            obj.insert(k, v);
+        }
+    }
     let text = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
     let file = dir.join(format!(
         "runningdo-backup-{}.json",
@@ -1629,8 +1736,8 @@ mod tests {
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("备份目标"));
         assert!(text.contains("备份事件"));
-        // v1.2：version 3（milestones + agendaItems + agendaSubitems）
-        assert!(text.contains("\"version\": 4"));
+        // v1.4：version 5（在 v1.3 的 routine slots 之上再加文献模块）
+        assert!(text.contains("\"version\": 5"));
         assert!(text.contains("\"milestones\""));
         assert!(text.contains("\"agendaItems\""));
     }
@@ -1759,7 +1866,7 @@ mod tests {
 
         let path = db.export_json().unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("\"version\": 4"));
+        assert!(text.contains("\"version\": 5"));
         assert!(text.contains("写 PRD"));
         assert!(text.contains("\"countdownId\""));
     }
@@ -1811,7 +1918,8 @@ mod tests {
                     .starts_with("runningdo-backup-")
             })
             .collect();
-        assert_eq!(backups.len(), 1, "首次加表前应留下一份兜底备份");
+        // 两次「新增表」的迁移各留一份兜底（v1.3 批次 + v1.4 文献表批次）
+        assert_eq!(backups.len(), 2, "每次新增表前都应有兜底备份");
         let text = std::fs::read_to_string(backups[0].path()).unwrap();
         assert!(text.contains("升级前就有的"));
 
@@ -1827,7 +1935,7 @@ mod tests {
                     .starts_with("runningdo-backup-")
             })
             .collect();
-        assert_eq!(again.len(), 1, "重启不应反复备份");
+        assert_eq!(again.len(), 2, "重启不应反复备份");
     }
 
     // ---------- 议程事项（v1.2 · AG-01 ~ AG-05） ----------
@@ -2019,13 +2127,13 @@ mod tests {
     }
 
     #[test]
-    fn export_includes_agenda_and_version_4() {
+    fn export_includes_agenda_and_version_5() {
         let db = tmp_db();
         let item = db.save_agenda_item(ag("导出用事项")).unwrap();
         db.save_agenda_subitem(ags(&item.id, "导出用子项")).unwrap();
         let path = db.export_json().unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("\"version\": 4"));
+        assert!(text.contains("\"version\": 5"));
         assert!(text.contains("导出用事项"));
         assert!(text.contains("导出用子项"));
         assert!(text.contains("\"agendaItems\""));
@@ -2083,7 +2191,7 @@ mod tests {
                     .starts_with("runningdo-backup-")
             })
             .collect();
-        assert_eq!(backups.len(), 1, "首次加表前应留一份兜底备份");
+        assert_eq!(backups.len(), 2, "每次新增表前都应有兜底备份");
         let text = std::fs::read_to_string(backups[0].path()).unwrap();
         assert!(text.contains("v1.1 的里程碑"));
 
@@ -2099,7 +2207,7 @@ mod tests {
                     .starts_with("runningdo-backup-")
             })
             .collect();
-        assert_eq!(again.len(), 1, "重启不应反复备份");
+        assert_eq!(again.len(), 2, "重启不应反复备份");
     }
     #[test]
     fn routine_slots_are_sparse_unique_and_date_isolated() {
@@ -2219,7 +2327,7 @@ mod tests {
             .is_none());
     }
     #[test]
-    fn export_v4_contains_routine_and_all_existing_data() {
+    fn export_v5_contains_routine_and_all_existing_data() {
         let db = tmp_db();
         let item = db.save_agenda_item(ag("旧便签")).unwrap();
         db.save_agenda_note(&item.id, "正文").unwrap();
@@ -2229,7 +2337,7 @@ mod tests {
         let path = db.export_json().unwrap();
         let json: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        assert_eq!(json["version"], 4);
+        assert_eq!(json["version"], 5);
         assert_eq!(json["dailyRoutineSlots"][0]["category"], "开发");
         assert_eq!(json["agendaItems"][0]["note"], "正文");
         assert_eq!(json["agendaSubitems"].as_array().unwrap().len(), 1);

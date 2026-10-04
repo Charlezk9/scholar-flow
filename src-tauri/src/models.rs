@@ -193,3 +193,149 @@ pub struct DailyRoutineSlot {
     pub created_at: String,
     pub updated_at: String,
 }
+
+// ═══════════════════════════════════════════════════════════
+// v1.4 · 文献模块（LIT-02 ~ LIT-08）
+// ═══════════════════════════════════════════════════════════
+
+/// 资料库文件夹节点（单亲树，Q1A）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryNode {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryNodeInput {
+    /// `None` / 空串 = 新建
+    pub id: Option<String>,
+    pub parent_id: Option<String>,
+    pub name: String,
+    /// `None` = 已有节点保持原顺序 / 新建时追加到末尾
+    #[serde(default)]
+    pub sort_order: Option<i64>,
+}
+
+/// 文献条目（论文 / 教材 / 杂志 / 其他）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Paper {
+    pub id: String,
+    pub node_id: Option<String>,
+    pub kind: String,
+    pub title: String,
+    pub authors: Option<String>,
+    pub year: Option<i64>,
+    pub venue: Option<String>,
+    pub doi: Option<String>,
+    pub url: Option<String>,
+    pub status: String,
+    pub note: Option<String>,
+    /// JSON：类型专属字段与模型建议的元数据（title/venue/…）
+    pub extra: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaperInput {
+    pub id: Option<String>,
+    pub node_id: Option<String>,
+    pub kind: String,
+    pub title: String,
+    pub authors: Option<String>,
+    pub year: Option<i64>,
+    pub venue: Option<String>,
+    pub doi: Option<String>,
+    pub url: Option<String>,
+    /// `None` = 保持原状态
+    #[serde(default)]
+    pub status: Option<String>,
+    pub note: Option<String>,
+    pub extra: Option<String>,
+}
+
+/// 附件（拷贝入库，记 sha256 与原路径）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaperFile {
+    pub id: String,
+    pub paper_id: String,
+    pub role: String,
+    pub original_path: Option<String>,
+    /// 相对数据目录，如 `files/papers/<paperId>/<sha8>-name.pdf`
+    pub rel_path: String,
+    pub size: Option<i64>,
+    pub sha256: Option<String>,
+    pub missing: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaperFileInput {
+    pub paper_id: String,
+    /// 磁盘上的绝对路径（由文件选择器或拖拽提供）
+    pub src_path: String,
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+/// 提取产物（多引擎并存，永不覆盖）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaperExtract {
+    pub id: String,
+    pub paper_id: String,
+    pub file_id: Option<String>,
+    pub engine: String,
+    pub engine_version: Option<String>,
+    pub source_sha256: Option<String>,
+    pub rel_path: Option<String>,
+    pub status: String,
+    pub pages: Option<i64>,
+    pub chars: Option<i64>,
+    /// JSON：质量检测指标
+    pub quality: Option<String>,
+    /// JSON：耗时 / token / 费用估算 / 模型建议的元数据
+    pub meta: Option<String>,
+    pub error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaperExtractInput {
+    pub id: Option<String>,
+    pub paper_id: String,
+    pub file_id: Option<String>,
+    pub engine: String,
+    pub engine_version: Option<String>,
+    pub source_sha256: Option<String>,
+    pub rel_path: Option<String>,
+    pub status: String,
+    pub pages: Option<i64>,
+    pub chars: Option<i64>,
+    pub quality: Option<String>,
+    pub meta: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 标签（Q2A：与文件夹正交）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at: String,
+}

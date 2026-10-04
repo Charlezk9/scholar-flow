@@ -10,6 +10,18 @@
 
 ---
 
+## 2026-10-04 · v1.4 阅读与提取增量验收
+
+完成本次交接要求：PDF.js 本地 worker、canvas 与可选文字层、换页/缩放；跨文件夹标签分配与取消；DOCX/PPTX 经 markitdown 持久化提取；Markdown、GFM 表格与 KaTeX 公式渲染。默认提取在密钥可用时走云端，失败降级本地；首次云端操作提示上传页面与费用。密钥只由后端读取 `~/.config/runningdo/secrets.env` 或环境变量，不进入前端与 Git。删除附件使用现有确认弹层，连带清理提取稿。
+
+GLM 真实单页验证：`glm-5.3-flash`，2,735 字符，11.912 秒，输入 4,981 / 输出 695 tokens，按中国区公开单价估算 ¥0.0059308（非账单金额）。标题、摘要、作者与会议提取可用；该页不含公式和表格，复杂页面质量尚未验证。证据和边界已回填 PLAN §2.4 / §3-Q4。
+
+实际验证：76 单元/样式、403 DOM、46 Rust，共 525 项通过；DOCX/PPTX 真实文件分别提取 30 / 86 字符。浏览器验证 15 页 PDF、换页、缩放、公式和表格；1040×700 大字号下导航可见且无横向溢出。隔离原生 bundle 验证附件入库与标签关联，并发现 WKWebView 不支持 ReadableStream 异步迭代；改由 TextLayer 直接读取流后，第一页及第二页画布与文字层均通过。正常用户数据目录未用于验收。
+
+备份 v5 补齐标签关联；设置、README、DESIGN 已说明 JSON 不含附件及提取稿。需求完成度只维护在 PRD §5.0，全文并发/断点续提与复杂云页面验证仍按 PRD 标记保留边界。
+
+---
+
 ## 2026-10-04 · 文档对账：补记 Git 初始化与真实库迁移
 
 只做对账与复验，没动业务代码。起因是「文档写着没做、现实早就做了」的两条尾巴。
@@ -49,6 +61,39 @@
 - 顺手修正两处过期描述：§1.2 目标里「月/周/日/**议程**视图」（v1.2 起议程已不是视图）、§6.1 ASCII 顶栏缺「议程」；§6.1 标题与布局说明限定为「日历页」。
 - **移除顶栏搜索占位按钮**（用户决议）：该按钮文案承诺「v0.3 提供搜索」，而搜索需求已作废——代码不能继续承诺不存在的计划。删掉 `TopBar.tsx` 的按钮与 `notify`、`app.css` 四处 `.search` 样式，把 tokens.test 的原断言改写为「日期文字先收缩、页面入口不让位（`.topbar > .ghost-btn { flex: 0 0 auto }`）」，同步 PRD §6.1 与 DESIGN §5.1 / D12。复跑 `pnpm check`：76 + 365 全绿（改写断言时踩了一次坑：`.topbar-date .d` 在 CSS 里有两处规则，`bodyOf` 只取首个，改为直接匹配源码）。
 - **清掉通知/自启的全部残留**（用户决议「全删」）：删设置页「通知」整节（导航项 + 卡片：启用通知开关、四条勾选项、提醒提前时间）、「**恢复**」卡片（按钮只说「恢复功能计划在 v0.3 提供」）、「**开机启动**」开关（`launchAtLogin` 仅存值）与菜单栏开关副文案里的「提醒才有意义」；删事件抽屉的「提醒」下拉（`REMIND_OPTIONS` + 表单项）。`remind_minutes` / `repeatRule` 等**保留透传**（不清空既有数据，沿用 v1.0 那条「整条覆写必须区分省略=保持原状」的教训）；同步 `DESIGN.md` D9、`api.ts` 注释；`drawer.smoke` 的 `.picker` 断言 6 → 5。顺手修正数据卡片文案（备份实际含全部数据，不只是「倒计时、事件、设置」）。复跑 `pnpm check`：76 + 365 全绿。
+
+**v1.4 文献模块：调研 + 施工图 + 环境落地**
+
+- **调研两个参照物**：Zotero（条目类型决定字段集、标签与分类正交、附件与条目分离）与 ScholarFlow（`papers` + `library_categories` 单亲树、文件拷贝入库 + sha256/缺失检测、`pdf2md` 四层版面管线约 2.1k 行 Rust、前端 PDF.js canvas + 原生 iframe 兜底），并把证据写进施工图 §2。
+- **写 [`PLAN-v1.4.md`](v1/PLAN-v1.4.md)**：范围（已确认 8 条 / 明确不做 4 条）、数据模型（`library_nodes` / `papers` / `paper_files` / `paper_extracts` / `tags`，备份升 v5 且不含二进制）、命令清单、提取双轨（内建快线 + 云 OCR，质量检测与 sha256 缓存）、UI 三栏、M0–M6 实施顺序、验收与风险。**12 项待拍板决议连同推荐方案全部写在 §3**（用户要求）。
+- **云引擎计价实测核实**（2026-10-04 检索）：GLM-OCR $0.03/M tokens、GLM-5.3-Flash $0.15/M 输入且支持 1M 上下文 + File 输入、Mistral OCR 4.x $4/千页、Mathpix $0.005/页 —— 一篇 15 页论文云转成本约 **$0.001–0.08**，「花钱能解决」成立，因此推荐**质量优先、云为默认、本地为降级**。
+- **建 v1.4 专用环境**（用户指定放项目内）：`.conda/lit`（Python 3.12.14），已装 `pymupdf` / `pypdfium2` / `markitdown[pdf,docx,pptx]` / `httpx` / `openai` 等；`.gitignore` 加 `.conda/`；已跑 `refresh-inventory.sh` 登记进 `~/Development/manifest/inventory.json`。用 `docs/test/attention-is-all-you-need.pdf` 实测：15 页 / 39,498 字符 / `(cid:)` 残留 0。
+- **本轮复跑**：`pnpm check` 76 + 365 全绿，`cargo test` 32 全绿。
+
+### 2026-10-04（下半）· v1.4 拍板与首个实现增量
+
+**拍板**：`PLAN-v1.4.md` §3 的 12 项决议全部取推荐方案（`Q1A~Q12A`），并在 **Q10 上加了一条硬要求**：云引擎提取时**必须一并返回标题与期刊/会议**（写入 `paper_extracts.meta.suggested`，前端可一键采纳）。拍板结果已回写 `PLAN-v1.4.md` §3 与 PRD §5.2c（新增 `LIT-02~LIT-12`）。
+
+**环境**：项目内 conda 环境 `.conda/lit`（Python 3.12.14）已就绪（`pymupdf` / `pypdfium2` / `markitdown` / `httpx` / `openai` 等），密钥放在仓库外的 `.env`（已 gitignore）。
+
+**已实现（M1 数据层 + M2 页面骨架 + M5 提取器接入）**
+
+| 层 | 内容 |
+| --- | --- |
+| Rust | `library.rs`：`library_nodes`（单亲树，自环检测）/ `papers` / `paper_files` / `paper_extracts` / `tags` 的 CRUD；附件**拷贝入库 + sha256 幂等去重 + 缺失标记**；路径越界防护；`run_extract` 调外部提取器并写产物记录（同引擎同 sha256 命中缓存） |
+| Rust | `db.rs`：v1.4 建表 + **新增表前再落一份兕底备份**（version 4）；`export_json` 升 `version: 5` 并带上文献模块（不含二进制） |
+| Python | `scripts/extract_markdown.py`：`fast`（PyMuPDF 文本层 → Markdown + 质量指标）与 `glm`（逐页图 → 多模态接口 → Markdown，提示词要求返回 title/venue） |
+| 前端 | `lib/literature.ts`（Tauri + localStorage 双后端）、`LiteraturePage.tsx`（库树 / 列表 / 详情三栏：文件夹、条目录入、状态、附件导入与阅读、提取与产物、建议元数据采纳）、顶栏第四页、样式 |
+| 测试 | `cargo test` **41**（+9：树级联、自环、文献落入未分类、状态不被局部保存重置、导入幂等与缺失、提取校验、标签幂等、备份 v5）；新冒烟套件 `literature.smoke.tsx` **24 项** |
+
+**本轮实跑**：`pnpm check` 76/76 + 365/365（12 套件，含新的文献套件）+ `cargo test` 41/41；`docs/test/attention-is-all-you-need.pdf` 用 `fast` 引擎实测：15 页 / 39,512 字符 / `cid` 残留 0。
+
+**用户追加两条硬要求（已落地）**
+
+1. **提取稿必须持久化，且与 PDF 放在一起**：路径约定改为同目录同主干名 —— `files/papers/<paperId>/<pdf 主干>.<engine>.md`（元数据 `.meta.json`）；PDF 与提取稿共同构成该文献项的「补充内容」，删附件时连带清理同主干产物。新增 3 条测试（路径约定、连带清理、**端到端**：导入真实 PDF → 跑 `fast` → 断言 md 与 PDF 同目录且 > 30k 字符）。
+2. **文件名可隐藏，标题必须能轻松改且不重复**：界面附件行只显示「正文 / 补充材料 / 幻灯片 + 体积」，提取行不再显示产物文件名；标题就地编辑（**回车保存 / Esc 撤销**，另有失焦保存）；**全库标题唯一**（归一化 = 忽略首尾空格与大小写），代码层拦截 + `lower(trim(title))` 唯一索引双保险，重复时提示「已有一篇同名文献，标题不能重复」。
+
+**未完成（下次继续）**：PDF.js canvas 阅读（当前是字节 + `iframe` 兑底，符合「最简 PDF 显示」）、标签 UI、docx/pptx 走 markitdown、云引擎（`glm`）的**真实 API 联调**（脚本已就绪，需带密钥跑一次并记录成本与质量）、Markdown 富文本渲染（现为等宽 `pre`）。
 
 ---
 
