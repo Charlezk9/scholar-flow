@@ -7,7 +7,7 @@
 | 文档 | 位置 | 说明 |
 | --- | --- | --- |
 | **开发日志** | [`docs/DEVLOG.md`](docs/DEVLOG.md) | **过程视角**：每次会话做了什么、被什么绊住、留下了什么尾巴 |
-| 产品需求 | [`docs/v0/PRD.md`](docs/v0/PRD.md) | 需求清单与验收标准（含 `AG-*` 议程模块） |
+| **产品需求** | [`docs/v0/PRD.md`](docs/v0/PRD.md) | **唯一活规格**：需求清单 + 验收标准 + §5.0 状态总览。**新功能先在 PRD 拿 ID 立项，再写计划**（规则见 PRD §0） |
 | 设计规范 | [`docs/v0/DESIGN.md`](docs/v0/DESIGN.md) | Design Tokens 与组件规格（含 §5.1b 皇冠栏、§5.3 卡片、§5.12 议程页） |
 | **v1.3 发布说明** | [`docs/v1/RELEASE-NOTES-v1.3.md`](docs/v1/RELEASE-NOTES-v1.3.md) | 两列便签、日常安排双栏、迁移与验证 |
 | v1.3 计划 | [`docs/v1/PLAN-v1.3.md`](docs/v1/PLAN-v1.3.md) | Q1–Q7 决议、实施与验收 |
