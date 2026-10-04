@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { CalendarDays, ListTodo, Search, Settings, Sun } from "lucide-react";
+import { CalendarDays, ListTodo, Settings, Sun } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { formatFullDate } from "../lib/date";
 import { useNow } from "../lib/tick";
@@ -32,7 +32,6 @@ export default function TopBar() {
   const page = useStore((s) => s.page);
   const setPage = useStore((s) => s.setPage);
   const goToday = useStore((s) => s.goToday);
-  const notify = useStore((s) => s.notify);
 
   return (
     <header className="topbar" data-tauri-drag-region>
@@ -49,18 +48,6 @@ export default function TopBar() {
       </button>
 
       <div className="topbar-spacer" />
-
-      {/* UI-20（决议 Q11）：外形保留，但点它会明确说「还没做」——
-          比一个永远点不动的输入框诚实 */}
-      <button
-        className="search"
-        title="搜索（v0.3 提供）"
-        aria-label="搜索（v0.3 提供）"
-        onClick={() => notify("搜索将在 v0.3 提供")}
-      >
-        <Search size={14} />
-        <span className="search-ph">搜索事件、倒计时或笔记…</span>
-      </button>
 
       <button
         className={`ghost-btn ${page === "calendar" ? "is-active" : ""}`}

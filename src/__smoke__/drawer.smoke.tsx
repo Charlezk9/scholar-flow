@@ -81,8 +81,8 @@ async function main() {
 
   ok("抽屉已渲染", !!q(".drawer"));
   const pickers = qa(".drawer .picker");
-  // 4 个日期/时间选择器 + 提醒下拉 + 地点输入，共 6 个 .picker
-  ok("抽屉里的 .picker 共 6 个（含提醒与地点）", pickers.length === 6, `实际：${pickers.length}`);
+  // 4 个日期/时间选择器 + 地点输入，共 5 个 .picker（v1.4 移除已作废的「提醒」下拉）
+  ok("抽屉里的 .picker 共 5 个（含地点）", pickers.length === 5, `实际：${pickers.length}`);
   const startTimeBtn = byText(".drawer .picker", "14:00");
   const endTimeBtn = byText(".drawer .picker", "16:00");
   ok("能定位到开始时间（显示 14:00）", !!startTimeBtn);

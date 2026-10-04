@@ -125,7 +125,7 @@ export interface CalEvent {
   note: string | null;
   location: string | null;
   color: string | null;
-  /** 提前多少分钟提醒；0 / null = 不提醒（v0.1 仅存值） */
+  /** 历史字段：UI 已移除（需求 `NT-01~05` 已作废），保留以兼容既有数据 */
   remindMinutes: number | null;
   repeatRule: string | null;
   repeatUntil: string | null;

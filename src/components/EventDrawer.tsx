@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, ChevronDown, MapPin, Trash2, X } from "lucide-react";
+import { MapPin, Trash2, X } from "lucide-react";
 import {
   EVENT_COLORS,
   colorMeta,
@@ -9,16 +9,6 @@ import {
 import { toISO, today } from "../lib/date";
 import { confirmThen, useStore } from "../store/useStore";
 import { DatePicker, TimePicker } from "./pickers";
-
-const REMIND_OPTIONS: { value: number; label: string }[] = [
-  { value: 0, label: "不提醒" },
-  { value: 5, label: "提前 5 分钟" },
-  { value: 15, label: "提前 15 分钟" },
-  { value: 30, label: "提前 30 分钟" },
-  { value: 60, label: "提前 1 小时" },
-  { value: 1440, label: "提前 1 天" },
-  { value: 4320, label: "提前 3 天" },
-];
 
 export default function EventDrawer() {
   const draft = useStore((s) => s.eventDraft);
@@ -184,36 +174,6 @@ export default function EventDrawer() {
                 />
               ))}
             </div>
-          </div>
-
-          <div className="form-row">
-            <label className="form-label">提醒</label>
-            <label className="picker" style={{ color: "var(--ink-2)" }}>
-              <Bell size={14} />
-              <span>
-                {REMIND_OPTIONS.find((o) => o.value === f.remindMinutes)?.label ??
-                  "不提醒"}
-              </span>
-              <ChevronDown size={14} className="chev" />
-              <select
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  opacity: 0,
-                  cursor: "pointer",
-                }}
-                value={String(f.remindMinutes)}
-                onChange={(e) => set("remindMinutes", Number(e.target.value))}
-              >
-                {REMIND_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
 
           <div className="form-row">

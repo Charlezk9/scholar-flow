@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Bell,
   Calendar,
   Check,
   Database,
@@ -20,18 +19,16 @@ import {
   FONT_SIZES,
   fontScaleOf,
   fontSizeLabel,
-  fs,
 } from "../lib/fontScale";
 import { useStore, type Settings } from "../store/useStore";
 import { useCrown } from "./CrownBar";
 
-type Section = "general" | "calendar" | "display" | "notify" | "data" | "theme";
+type Section = "general" | "calendar" | "display" | "data" | "theme";
 
 const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key: "general", label: "常规", icon: <SettingsIcon size={16} /> },
   { key: "calendar", label: "日历", icon: <Calendar size={16} /> },
   { key: "display", label: "显示", icon: <Monitor size={16} /> },
-  { key: "notify", label: "通知", icon: <Bell size={16} /> },
   { key: "data", label: "数据", icon: <Database size={16} /> },
   { key: "theme", label: "主题", icon: <Palette size={16} /> },
 ];
@@ -44,7 +41,6 @@ const HEAD: Record<Section, { title: string; sub: string; icon: React.ReactNode 
   },
   calendar: { title: "日历", sub: "日历内容与周起始日", icon: <Calendar size={20} /> },
   display: { title: "显示", sub: "纸张质感与信息密度", icon: <Monitor size={20} /> },
-  notify: { title: "通知", sub: "提醒时机与免打扰", icon: <Bell size={20} /> },
   data: { title: "数据", sub: "备份与数据位置", icon: <Database size={20} /> },
   theme: { title: "主题", sub: "选择界面使用的纸张纹理", icon: <Palette size={20} /> },
 };
@@ -96,13 +92,11 @@ function SwitchRow({
   sub,
   on,
   onToggle,
-  disabled,
 }: {
   name: string;
   sub?: string;
   on: boolean;
   onToggle: () => void;
-  disabled?: boolean;
 }) {
   return (
     <div className="card-row">
@@ -113,9 +107,7 @@ function SwitchRow({
       <button
         className={`switch ${on ? "is-on" : ""}`}
         onClick={onToggle}
-        disabled={disabled}
-        style={disabled ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
-        title={disabled ? "v0.2 提供" : name}
+        title={name}
       />
     </div>
   );
@@ -252,16 +244,9 @@ export default function SettingsPage() {
               />
               <SwitchRow
                 name="菜单栏常驻"
-                sub="关闭窗口后仍在菜单栏运行，提醒才有意义"
+                sub="关闭窗口后仍留在菜单栏，点图标可重新打开"
                 on={s.menuBarIcon}
                 onToggle={() => set("menuBarIcon", !s.menuBarIcon)}
-              />
-              <SwitchRow
-                name="开机启动"
-                sub="登录系统后自动启动 RunningDO"
-                on={s.launchAtLogin}
-                onToggle={() => set("launchAtLogin", !s.launchAtLogin)}
-                disabled
               />
               <div className="card-row">
                 <span className="k">
@@ -475,43 +460,13 @@ export default function SettingsPage() {
           </div>
         ) : null}
 
-        {section === "notify" ? (
-          <div className="settings-cols">
-            <Card
-              icon={<Bell size={17} />}
-              title="通知"
-              desc="提醒功能在 v0.2 接入系统通知，当前仅保存设置"
-            >
-              <SwitchRow
-                name="启用通知"
-                sub="以以下情况发送系统通知"
-                on={false}
-                onToggle={() => notify("通知将在 v0.2 提供")}
-                disabled
-              />
-              <div className="checks" style={{ paddingLeft: 2 }}>
-                <CheckRow on label="即将到期的倒计时提醒" onToggle={() => notify("v0.2")} />
-                <CheckRow on label="日程开始提醒" onToggle={() => notify("v0.2")} />
-                <CheckRow on label="倒计时逾期提醒" onToggle={() => notify("v0.2")} />
-                <CheckRow on={false} label="每日总结提醒" onToggle={() => notify("v0.2")} />
-              </div>
-              <div className="card-row">
-                <span className="k">
-                  <span className="name">提醒提前时间</span>
-                </span>
-                <span style={{ fontSize: fs(13), color: "var(--ink-3)" }}>10 分钟</span>
-              </div>
-            </Card>
-          </div>
-        ) : null}
-
         {section === "data" ? (
           <div className="settings-cols">
             <Card icon={<Database size={17} />} title="数据" desc="全部数据保存在本地 SQLite，不联网">
               <div className="card-row">
                 <span className="k">
                   <span className="name">手动备份</span>
-                  <span className="sub">导出为 JSON 文件（含倒计时、事件、设置）</span>
+                  <span className="sub">导出为 JSON 文件（含倒计时、里程碑、事件、议程、日常安排与设置）</span>
                 </span>
                 <button className="btn btn-outline btn-sm" onClick={() => void doBackup()}>
                   <RefreshCw size={13} />
@@ -534,25 +489,6 @@ export default function SettingsPage() {
               <div className="path-box" title={dataDir}>
                 {dataDir || "…"}
               </div>
-            </Card>
-
-            <Card icon={<RefreshCw size={17} />} title="恢复" desc="从 JSON 备份文件恢复数据">
-              <div className="card-row">
-                <span className="k">
-                  <span className="name">从备份恢复</span>
-                  <span className="sub">会把当前数据替换为备份内容</span>
-                </span>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() => notify("恢复功能计划在 v0.3 提供")}
-                >
-                  选择文件
-                </button>
-              </div>
-              <p className="desc" style={{ marginTop: 8, marginBottom: 0 }}>
-                备份文件命名形如 <code>runningdo-backup-20260601-083000.json</code>，
-                可直接用文本编辑器查看。
-              </p>
             </Card>
           </div>
         ) : null}

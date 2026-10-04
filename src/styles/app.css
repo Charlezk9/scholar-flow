@@ -142,9 +142,7 @@ textarea {
   -webkit-user-select: text;
 }
 /* 顶栏内可交互元素必须退出拖拽区 */
-.topbar button,
-.topbar .search,
-.topbar .search * {
+.topbar button {
   -webkit-app-region: no-drag;
 }
 
@@ -181,36 +179,6 @@ textarea {
 .topbar-spacer {
   flex: 1;
   min-width: var(--sp-4);
-}
-
-.search {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  width: 320px;
-  min-height: calc(32px + var(--fs-step) * 13px);
-  padding: 0 var(--sp-3);
-  background: var(--paper-sunken);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  color: var(--ink-3);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.search:focus-within {
-  border-color: var(--cinnabar-soft);
-  box-shadow: 0 0 0 3px rgba(192, 85, 74, 0.1);
-}
-.search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: none;
-  outline: none;
-  color: var(--ink-1);
-  font-size: calc(13px * var(--font-scale));
-}
-.search input::placeholder {
-  color: var(--ink-3);
 }
 
 .ghost-btn {
@@ -2936,21 +2904,6 @@ textarea.field {
   gap: var(--sp-2);
 }
 
-/* 顶栏搜索：不再是「点不动的输入框」，而是会说明「还没做」的按钮 */
-.search-ph {
-  font-size: calc(13px * var(--font-scale));
-  color: var(--ink-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.search {
-  cursor: pointer;
-}
-.search:hover {
-  border-color: var(--cinnabar-soft);
-}
-
 /* v1.3 · 便签正文与待办分区。沿用纸张 token，样式仅作用于议程。 */
 .ag-card {
   min-width: 0;
@@ -3237,7 +3190,7 @@ textarea.field {
   grid-template-columns: 56px repeat(2, minmax(0, 1fr));
 }
 
-/* 窗口变窄时先让搜索占位和日期文字收缩，页面入口始终可见。 */
+/* 窗口变窄时先让日期文字收缩，页面入口始终可见。 */
 .topbar .brand, .topbar > .ghost-btn, .topbar-date .clock, .topbar-date .sep, .topbar svg {
   flex: 0 0 auto;
 }
@@ -3251,16 +3204,6 @@ textarea.field {
 }
 .topbar-spacer {
   min-width: 0;
-}
-.topbar .search {
-  flex: 0 1 320px;
-  min-width: 38px;
-  overflow: hidden;
-}
-.topbar .search-ph {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 @media (max-width: 1180px) {
   .topbar { gap: 8px; }

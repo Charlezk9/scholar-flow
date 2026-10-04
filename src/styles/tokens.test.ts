@@ -68,7 +68,6 @@ test("所有 font-size 都乘了 --font-scale（除预览示例外不允许固�
 
 const TEXT_CONTAINERS = [
   ".topbar-date",
-  ".search",
   ".ghost-btn",
   ".field, .input",
   ".picker",
@@ -108,7 +107,7 @@ test("承载文字的容器一律用 min-height，不用固定 height", () => {
 });
 
 test("min-height 用 calc 且随 --fs-step 温和增长（不是恒定值）", () => {
-  for (const sel of [".btn", ".picker", ".search", ".pop-day", ".badge", ".mini-grid .d"]) {
+  for (const sel of [".btn", ".picker", ".pop-day", ".badge", ".mini-grid .d"]) {
     const body = bodyOf(sel) ?? "";
     const decl = body.match(/min-height:\s*[^;]+;/)?.[0] ?? "";
     assert.ok(decl !== "", `${sel} 没有 min-height`);
@@ -545,8 +544,9 @@ test("v1.3 · 日视图双栏使用可收缩等宽轨道，保留月历宽度规
   assert.match(bodyOf(".rail") ?? "", /width:\s*var\(--rail-w\)/);
 });
 
-test("v1.3 · 窄窗顶栏搜索先收缩，页面入口不参与收缩", () => {
-  assert.match(bodyOf(".topbar .search") ?? "", /min-width:\s*38px/);
-  assert.match(bodyOf(".topbar .search-ph") ?? "", /text-overflow:\s*ellipsis/);
+test("v1.4 · 窄窗顶栏日期文字先收缩，页面入口不参与收缩", () => {
+  // 注意：`.topbar-date .d` 在文件里有两处规则，bodyOf 只取首个，故直接匹配源码
+  assert.match(appCss, /\.topbar-date \.d\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(appCss, /\.topbar-date \.d\s*\{[^}]*text-overflow:\s*ellipsis/);
   assert.match(appCss, /\.topbar > \.ghost-btn[^{}]*\{[^}]*flex:\s*0 0 auto/);
 });
