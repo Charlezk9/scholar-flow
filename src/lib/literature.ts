@@ -63,6 +63,10 @@ export interface PaperFile {
   updatedAt: string;
 }
 
+export type TranslationProgress = {completed: number; total: number; stage: "translating" | "retrying" | "failed" | "done"; updatedAt: number};
+
+export type TranslationPair = {id: number; source: string; translation: string};
+
 export interface PaperExtract {
   id: string;
   paperId: string;
@@ -123,6 +127,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 const tauriLit = {
   cloudReady: () => call<boolean>("literature_cloud_ready"),
+  chooseFile: (paperId: string) => call<PaperFile | null>("choose_paper_file", { paperId }),
   listNodes: () => call<LibraryNode[]>("list_library_nodes"),
   saveNode: (input: { id?: string; parentId: string | null; name: string; sortOrder?: number }) =>
     call<LibraryNode>("save_library_node", { input }),
@@ -143,6 +148,9 @@ const tauriLit = {
     call<PaperExtract>("extract_paper_markdown", { paperId, engine, fileId }),
   deleteExtract: (id: string) => call<void>("delete_paper_extract", { id }),
   readExtract: (id: string) => call<string>("read_paper_extract", { id }),
+  translationProgress: (paperId: string, fileId?: string) => call<TranslationProgress | null>("translation_progress", {paperId,fileId}),
+  readTranslation: (id: string) => call<TranslationPair[]>("read_translation_blocks", { id }),
+  readAsset: (id: string, asset: string) => call<number[]>("read_paper_asset", { id, asset }),
 
   listTags: () => call<Tag[]>("list_tags"),
   listPaperTags: (paperId: string) => call<Tag[]>("list_paper_tags", { paperId }),
@@ -178,6 +186,9 @@ function previewLit() {
   const write = (data: PreviewStore) => localStorage.setItem(LS_KEY, JSON.stringify(data));
 
   return {
+    translationProgress: async (_paperId: string, _fileId?: string): Promise<TranslationProgress | null> => null,
+    readTranslation: async (_id: string): Promise<TranslationPair[]> => {throw new Error("预览没有翻译映射文件");},
+    readAsset: async (_id: string, _asset: string): Promise<number[]> => { throw new Error("预览没有图片资产"); },
     cloudReady: async () => false,
     listNodes: async () => read().nodes ?? [],
     saveNode: async (input: { id?: string; parentId: string | null; name: string; sortOrder?: number }) => {
@@ -285,6 +296,7 @@ function previewLit() {
       });
     },
 
+    chooseFile: async (_paperId: string): Promise<PaperFile | null> => { throw new Error("请在桌面应用中选择附件"); },
     listFiles: async () => read().files ?? [],
     importFile: async (input: { paperId: string; srcPath: string; role?: string }) => {
       const d = read();
@@ -293,6 +305,7 @@ function previewLit() {
       const sha = `preview-${input.srcPath.trim().length}-${input.srcPath.trim().slice(-12)}`;
       const existing = files.find((f) => f.paperId === input.paperId && f.sha256 === sha);
       if (existing) return existing;
+      if (/\.pdf$/i.test(input.srcPath) && files.some(f=>f.paperId === input.paperId && /\.pdf$/i.test(f.relPath))) throw new Error("每条文献只能有一个 PDF 源，请先清空现有 PDF 源");
       const file: PaperFile = {
         id: uid("file"),
         paperId: input.paperId,
@@ -310,7 +323,7 @@ function previewLit() {
     },
     deleteFile: async (id: string) => {
       const d = read();
-      write({ ...d, files: (d.files ?? []).filter((f) => f.id !== id) });
+      write({ ...d, files: (d.files ?? []).filter((f) => f.id !== id), extracts:(d.extracts ?? []).filter(e=>e.fileId !== id) });
     },
     readFile: async () => {
       throw new Error("浏览器预览模式不提供 PDF 渲染，请在应用内使用");

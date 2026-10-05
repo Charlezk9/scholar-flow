@@ -1,0 +1,16 @@
+{
+  "paper": "Attention Is All You Need",
+  "pages": 15,
+  "blocks": 159,
+  "missingOriginalBlocks": [],
+  "figures": 5,
+  "usage": {
+    "promptTokens": 41721,
+    "completionTokens": 2935,
+    "seconds": 41.026,
+    "estimatedCost": 0.0415948,
+    "currency": "CNY",
+    "totalSeconds": 41.759
+  },
+  "rawSha256": "fef63d7ce8b961320fd2703e9c0ecf1cd9124a50ac55326f9a956b3ddac5f273"
+}

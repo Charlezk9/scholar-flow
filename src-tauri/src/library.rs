@@ -589,6 +589,14 @@ impl Db {
             return Ok(existing);
         }
 
+        if src.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf")) {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM paper_files WHERE paper_id=?1 AND lower(rel_path) LIKE '%.pdf'",
+                params![input.paper_id], |r| r.get(0),
+            ).map_err(|e| e.to_string())?;
+            if count > 0 { return Err("每条文献只能有一个 PDF 源，请先清空现有 PDF 源".into()); }
+        }
+
         let dir = self.dir.join("files").join("papers").join(&input.paper_id);
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建附件目录失败: {e}"))?;
         let short = &sha[..8.min(sha.len())];
@@ -652,10 +660,20 @@ impl Db {
                     ".glm.meta.json",
                     ".markitdown.md",
                     ".markitdown.meta.json",
+                    ".layout.md",
+                    ".translation.md",
+                    ".translation.meta.json",
+                    ".translation.checkpoint.json",
+                    ".translation.progress.json",
+                    ".layout.meta.json",
                 ] {
                     if let Ok(sibling) = resolve_inside(&self.dir, &sibling_rel(&rel, suffix)) {
                         let _ = std::fs::remove_file(sibling);
                     }
+                }
+                let assets = sibling_rel(&rel, ".layout.assets");
+                if let Ok(path) = resolve_inside(&self.dir, &assets) {
+                    let _ = std::fs::remove_dir_all(path);
                 }
                 let _ = std::fs::remove_file(abs);
             }
@@ -765,9 +783,29 @@ impl Db {
     }
 
     pub fn delete_paper_extract(&self, id: &str) -> Result<(), String> {
+        let dependents: Vec<String> = self.list_paper_extracts(None)?.into_iter().filter(|e| {
+            e.engine == "translation" && serde_json::from_str::<serde_json::Value>(e.meta.as_deref().unwrap_or("{}"))
+                .is_ok_and(|meta| meta["sourceExtractId"].as_str() == Some(id))
+        }).map(|e| e.id).collect();
+        for dependent in dependents { if dependent != id { self.delete_paper_extract(&dependent)?; } }
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute("DELETE FROM paper_extracts WHERE id=?1", params![id])
-            .map_err(|e| e.to_string())?;
+        let rel: Option<String> = conn.query_row("SELECT rel_path FROM paper_extracts WHERE id=?1", params![id], |r| r.get(0)).optional().map_err(|e| e.to_string())?.flatten();
+        if let Some(rel) = rel {
+            if let Ok(path) = resolve_inside(&self.dir, &rel) {
+                if path.exists() { std::fs::remove_file(&path).map_err(|e| e.to_string())?; }
+                let meta = path.with_extension("meta.json");
+                if meta.exists() { std::fs::remove_file(meta).map_err(|e| e.to_string())?; }
+                if path.file_name().is_some_and(|n| n.to_string_lossy().ends_with(".translation.md")) {
+                    for suffix in ["checkpoint.json","progress.json"] {
+                        let auxiliary=path.with_extension(suffix);
+                        if auxiliary.exists() {std::fs::remove_file(auxiliary).map_err(|e| e.to_string())?;}
+                    }
+                }
+                let assets = path.with_extension("assets");
+                if assets.exists() { std::fs::remove_dir_all(assets).map_err(|e| e.to_string())?; }
+            }
+        }
+        conn.execute("DELETE FROM paper_extracts WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -788,6 +826,78 @@ impl Db {
         };
         let abs = resolve_inside(&self.dir, &rel)?;
         std::fs::read_to_string(&abs).map_err(|e| format!("读取产物失败: {e}"))
+    }
+
+    pub fn translation_progress(&self, paper_id: &str, file_id: Option<&str>) -> Result<Option<serde_json::Value>, String> {
+        let file = self.list_paper_files()?.into_iter()
+            .find(|f| f.paper_id == paper_id && file_id.is_none_or(|id| f.id == id)).ok_or("源附件不存在")?;
+        let path = resolve_inside(&self.dir, &extract_md_rel(&file.rel_path,"translation"))?.with_extension("progress.json");
+        let path = resolve_inside(&self.dir, &rel_to_dir(&self.dir,&path))?;
+        let Ok(text) = std::fs::read_to_string(path) else {return Ok(None);};
+        let data: serde_json::Value = serde_json::from_str(&text).map_err(|_| "进度数据无效")?;
+        let completed=data["completed"].as_u64().ok_or("进度数据无效")?;
+        let total=data["total"].as_u64().filter(|n| *n>0 && *n>=completed).ok_or("进度数据无效")?;
+        let stage=data["stage"].as_str().filter(|s| ["translating","retrying","failed","done"].contains(s)).ok_or("进度数据无效")?;
+        Ok(Some(serde_json::json!({"completed":completed,"total":total,"stage":stage,"updatedAt":data["updatedAt"]})))
+    }
+
+    /// 对照全文只保存在译稿旁的侧文件，数据库/JSON备份仅存来源关系。
+    pub fn read_translation_blocks(&self, id: &str) -> Result<serde_json::Value, String> {
+        let extract = self.list_paper_extracts(None)?.into_iter()
+            .find(|e| e.id == id && e.engine == "translation" && e.status == "done")
+            .ok_or("译稿不存在")?;
+        let path = resolve_inside(&self.dir, extract.rel_path.as_deref().ok_or("译稿路径缺失")?)?;
+        let metadata = resolve_inside(&self.dir, &rel_to_dir(&self.dir, &path.with_extension("meta.json")))?;
+        let value: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(metadata).map_err(|_| "段落映射文件缺失")?).map_err(|_| "段落映射文件无效")?;
+        let blocks = value.get("blocks").filter(|v| v.is_array()).ok_or("段落映射缺失")?;
+        let items = blocks.as_array().ok_or("段落映射缺失")?;
+        if items.is_empty() || items.iter().enumerate().any(|(index, block)| {
+            block["id"].as_u64() != Some(index as u64)
+                || !block["source"].as_str().is_some_and(|s| !s.trim().is_empty())
+                || !block["translation"].as_str().is_some_and(|s| !s.trim().is_empty())
+        }) { return Err("段落映射无效".into()); }
+        Ok(blocks.clone())
+    }
+
+    /// 只读取登记的图片资产；规范化后检查符号链接边界。
+    pub fn read_paper_asset(&self, id: &str, asset: &str) -> Result<Vec<u8>, String> {
+        let extracts = self.list_paper_extracts(None)?;
+        let extract = extracts
+            .iter()
+            .find(|e| e.id == id && e.status == "done")
+            .ok_or("产物不存在")?;
+        let meta: serde_json::Value = serde_json::from_str(extract.meta.as_deref().unwrap_or("{}"))
+            .map_err(|_| "资产元数据无效")?;
+        if !meta["assets"].as_array().is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item["path"].as_str() == Some(asset))
+        }) {
+            return Err("未登记的图片资产".into());
+        }
+        let md = resolve_inside(
+            &self.dir,
+            extract.rel_path.as_deref().ok_or("产物文件缺失")?,
+        )?;
+        let directory = md
+            .with_extension("assets")
+            .canonicalize()
+            .map_err(|_| "图片目录缺失")?;
+        let path = resolve_inside(md.parent().ok_or("产物路径无效")?, asset)?
+            .canonicalize()
+            .map_err(|_| "图片缺失")?;
+        let root = self.dir.canonicalize().map_err(|e| e.to_string())?;
+        if !directory.starts_with(&root)
+            || !path.starts_with(&directory)
+            || path.extension().and_then(|x| x.to_str()) != Some("png")
+        {
+            return Err("图片路径越界".into());
+        }
+        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+        if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Err("图片格式无效".into());
+        }
+        Ok(bytes)
     }
 
     /// 提取产物的存放目录（脚本写文件用），相对数据目录。
@@ -884,11 +994,11 @@ impl Db {
         requested_file: Option<&str>,
     ) -> Result<PaperExtract, String> {
         let engine = engine.trim();
-        if !["fast", "glm", "markitdown"].contains(&engine) {
+        if !["fast", "glm", "markitdown", "layout", "translation"].contains(&engine) {
             return Err(format!("未知引擎：{engine}"));
         }
 
-        let (file_id, sha, abs) = {
+        let (file_id, mut sha, abs) = {
             let conn = self.conn.lock().map_err(|e| e.to_string())?;
             let row: Option<(String, Option<String>, String)> = conn
                 .query_row(
@@ -906,6 +1016,15 @@ impl Db {
             return Err(format!("附件已丢失：{}", abs.to_string_lossy()));
         }
 
+        let translation_source = if engine == "translation" {
+            let source = self.list_paper_extracts(Some(paper_id))?.into_iter()
+                .find(|e| e.engine == "layout" && e.status == "done" && e.file_id.as_deref() == Some(&file_id))
+                .ok_or("请先完成Markdown整理")?;
+            let content = self.read_paper_extract(&source.id)?;
+            sha = Some(format!("{:x}", Sha256::digest(content.as_bytes())));
+            Some(source)
+        } else { None };
+
         if let Some(cached) = {
             let conn = self.conn.lock().map_err(|e| e.to_string())?;
             conn.query_row(
@@ -918,7 +1037,11 @@ impl Db {
             .optional()
             .map_err(|e| e.to_string())?
         } {
-            if cached
+            let source_matches = translation_source.as_ref().is_none_or(|source| {
+                serde_json::from_str::<serde_json::Value>(cached.meta.as_deref().unwrap_or("{}"))
+                    .is_ok_and(|meta| meta["sourceExtractId"].as_str() == Some(&source.id))
+            });
+            if source_matches && (translation_source.is_none() || self.read_translation_blocks(&cached.id).is_ok()) && cached
                 .rel_path
                 .as_ref()
                 .is_some_and(|rel| resolve_inside(&self.dir, rel).is_ok_and(|p| p.is_file()))
@@ -949,8 +1072,32 @@ impl Db {
                 .to_string()
         });
 
-        let run = std::process::Command::new(&py)
-            .arg(&script)
+        let raw = if let Some(source) = &translation_source {
+            Some(resolve_inside(&self.dir, source.rel_path.as_deref().ok_or("整理稿文件缺失")?)?)
+        } else if engine == "layout" {
+            let extracts = self.list_paper_extracts(Some(paper_id))?;
+            let source = extracts
+                .iter()
+                .find(|e| {
+                    e.file_id.as_deref() == Some(&file_id)
+                        && e.engine != "layout" && e.engine != "translation"
+                        && e.status == "done"
+                        && e.source_sha256 == sha
+                })
+                .ok_or("请先提取原稿")?;
+            Some(resolve_inside(
+                &self.dir,
+                source.rel_path.as_deref().ok_or("原稿文件缺失")?,
+            )?)
+        } else {
+            None
+        };
+        let mut command = std::process::Command::new(&py);
+        command.arg(&script);
+        if let Some(raw) = raw {
+            command.arg("--raw").arg(raw);
+        }
+        let run = command
             .args(["--engine", engine])
             .arg("--in")
             .arg(&abs)
@@ -985,7 +1132,7 @@ impl Db {
                 chars: None,
                 quality: None,
                 meta: None,
-                error: Some(format!("提取失败：{tail}")),
+                error: Some(format!("{}：{}",if engine == "translation" {"翻译失败"} else {"提取失败"},tail.trim().trim_start_matches("提取失败："))),
             });
         }
 
@@ -1014,6 +1161,9 @@ impl Db {
             meta: Some(
                 serde_json::json!({
                     "suggested": suggested,
+                    "assets": meta_json.get("assets").cloned().unwrap_or(serde_json::json!([])),
+                    "source": meta_json.get("source").cloned(),
+                    "sourceExtractId": translation_source.as_ref().map(|s| &s.id),
                     "usage": meta_json.get("usage").cloned().unwrap_or(serde_json::json!({})),
                 })
                 .to_string(),
@@ -1238,6 +1388,10 @@ mod tests {
         assert_eq!(first.id, second.id);
         assert_eq!(db.list_paper_files().unwrap().len(), 1);
 
+        let other = dir.join("other.PDF");
+        std::fs::write(&other, b"different source").unwrap();
+        assert!(db.import_paper_file(PaperFileInput {paper_id:paper.id.clone(),src_path:other.to_string_lossy().into(),role:None}).unwrap_err().contains("一个 PDF 源"));
+
         // 读字节 + 缺失检测
         let bytes = db.read_paper_file(&first.id).unwrap();
         assert_eq!(bytes, b"%PDF-1.7 fake");
@@ -1315,6 +1469,94 @@ mod tests {
 
         // 删文献 → 提取记录级联清掉
         db.delete_paper(&paper.id).unwrap();
+        assert!(db.list_paper_extracts(None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn translation_cache_persistence_and_source_cleanup() {
+        let (db, dir) = tmp_db();
+        let paper = db.save_paper(paper_input("Translation fixture")).unwrap();
+        let src = dir.join("paper.pdf");
+        std::fs::write(&src, b"%PDF-1.7").unwrap();
+        let file = db.import_paper_file(PaperFileInput {paper_id:paper.id.clone(),src_path:src.to_string_lossy().into_owned(),role:None}).unwrap();
+        assert!(db.run_extract_file(&paper.id,"translation",Some(&file.id)).unwrap_err().contains("整理"));
+        let layout_rel=extract_md_rel(&file.rel_path,"layout");
+        let content="# English source\n\nA $x_i$.";
+        std::fs::write(dir.join(&layout_rel),content).unwrap();
+        let source=db.save_paper_extract(PaperExtractInput {id:None,paper_id:paper.id.clone(),file_id:Some(file.id.clone()),engine:"layout".into(),engine_version:None,source_sha256:file.sha256.clone(),rel_path:Some(layout_rel.clone()),status:"done".into(),pages:None,chars:None,quality:None,meta:None,error:None}).unwrap();
+        let translated_rel=extract_md_rel(&file.rel_path,"translation");
+        std::fs::write(dir.join(&translated_rel),"# 中文译稿").unwrap();
+        std::fs::write(dir.join(&translated_rel).with_extension("meta.json"),serde_json::json!({"blocks":[{"id":0,"source":"English","translation":"中文"}]}).to_string()).unwrap();
+        let translated=db.save_paper_extract(PaperExtractInput {id:None,paper_id:paper.id.clone(),file_id:Some(file.id.clone()),engine:"translation".into(),engine_version:None,source_sha256:Some(format!("{:x}",Sha256::digest(content.as_bytes()))),rel_path:Some(translated_rel.clone()),status:"done".into(),pages:None,chars:None,quality:None,meta:Some(serde_json::json!({"sourceExtractId":source.id}).to_string()),error:None}).unwrap();
+        let cached=db.run_extract_file(&paper.id,"translation",Some(&file.id)).unwrap();
+        assert_eq!(cached.id,translated.id);
+        assert_eq!(db.read_paper_extract(&cached.id).unwrap(),"# 中文译稿");
+        assert_eq!(db.read_translation_blocks(&cached.id).unwrap()[0]["translation"],"中文");
+        assert!(!cached.meta.unwrap().contains("English"));
+        let progress_path=dir.join(&translated_rel).with_extension("progress.json");
+        let checkpoint_path=dir.join(&translated_rel).with_extension("checkpoint.json");
+        std::fs::write(&progress_path,serde_json::json!({"completed":1,"total":3,"stage":"retrying","updatedAt":1}).to_string()).unwrap();
+        std::fs::write(&checkpoint_path,"{}").unwrap();
+        assert_eq!(db.translation_progress(&paper.id,Some(&file.id)).unwrap().unwrap()["completed"],1);
+        assert!(db.translation_progress("other-paper",Some(&file.id)).is_err());
+        let mapping_path=dir.join(&translated_rel).with_extension("meta.json");
+        let mapping=std::fs::read_to_string(&mapping_path).unwrap();
+        std::fs::write(&mapping_path,"{\"blocks\":[{\"id\":4,\"source\":\"A\",\"translation\":\"中\"}]}").unwrap();
+        assert!(db.read_translation_blocks(&translated.id).is_err());
+        std::fs::write(&mapping_path,mapping).unwrap();
+        drop(db);
+        let db=Db::open(dir.join("t.db")).unwrap();
+        assert_eq!(db.read_paper_extract(&translated.id).unwrap(),"# 中文译稿");
+        db.delete_paper_extract(&source.id).unwrap();
+        assert!(db.list_paper_extracts(None).unwrap().is_empty());
+        assert!(!dir.join(translated_rel).exists());
+        assert!(!progress_path.exists());
+        assert!(!checkpoint_path.exists());
+        assert!(dir.join(&file.rel_path).exists());
+    }
+
+    #[test]
+    fn image_assets_are_registered_and_confined() {
+        let (db, dir) = tmp_db();
+        let paper = db.save_paper(paper_input("图片测试")).unwrap();
+        let assets = dir.join("sample.layout.assets");
+        std::fs::create_dir_all(&assets).unwrap();
+        let png = b"\x89PNG\r\n\x1a\nfixture";
+        std::fs::write(assets.join("figure.png"), png).unwrap();
+        std::fs::write(dir.join("outside.png"), png).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(dir.join("outside.png"), assets.join("link.png")).unwrap();
+        let extract = db.save_paper_extract(PaperExtractInput {
+            id: None, paper_id: paper.id, file_id: None, engine: "layout".into(), engine_version: None,
+            source_sha256: None, rel_path: Some("sample.layout.md".into()), status: "done".into(),
+            pages: None, chars: None, quality: None, error: None,
+            meta: Some(serde_json::json!({"assets":[{"path":"sample.layout.assets/figure.png"},{"path":"sample.layout.assets/link.png"},{"path":"../outside.png"},{"path":"/tmp/outside.png"}]}).to_string()),
+        }).unwrap();
+        assert_eq!(
+            db.read_paper_asset(&extract.id, "sample.layout.assets/figure.png")
+                .unwrap(),
+            png
+        );
+        assert!(db.read_paper_asset(&extract.id, "outside.png").is_err());
+        assert!(db.read_paper_asset(&extract.id, "../outside.png").is_err());
+        assert!(db
+            .read_paper_asset(&extract.id, "/tmp/outside.png")
+            .is_err());
+        #[cfg(unix)]
+        assert!(db
+            .read_paper_asset(&extract.id, "sample.layout.assets/link.png")
+            .is_err());
+        std::fs::write(dir.join("sample.layout.md"), "整理稿").unwrap();
+        std::fs::write(dir.join("sample.layout.meta.json"), "{}").unwrap();
+        std::fs::write(dir.join("sample.pdf"), "PDF source").unwrap();
+        std::fs::write(dir.join("sample.fast.md"), "internal raw").unwrap();
+        db.delete_paper_extract(&extract.id).unwrap();
+        assert!(!dir.join("sample.layout.md").exists());
+        assert!(!dir.join("sample.layout.meta.json").exists());
+        assert!(!assets.exists());
+        assert!(dir.join("sample.pdf").exists());
+        assert!(dir.join("sample.fast.md").exists());
+        assert!(dir.join("outside.png").exists());
         assert!(db.list_paper_extracts(None).unwrap().is_empty());
     }
 

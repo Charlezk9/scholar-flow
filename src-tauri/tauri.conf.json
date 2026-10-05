@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RunningDO",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "identifier": "com.charlezk9.runningdo",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "dragDropEnabled": false,
         "title": "RunningDO",
         "width": 1240,
         "height": 840,

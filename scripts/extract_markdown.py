@@ -186,7 +186,8 @@ def main() -> int:
     ap.add_argument("--meta", dest="meta", required=True)
     ap.add_argument("--dpi", type=int, default=200)
     ap.add_argument("--max-pages", type=int)
-    ap.add_argument("--engine", default="fast", choices=["fast", "glm", "markitdown"])
+    ap.add_argument("--engine", default="fast", choices=["fast", "glm", "markitdown", "layout", "translation"])
+    ap.add_argument("--raw")
     args = ap.parse_args()
 
     src = Path(args.src)
@@ -195,7 +196,15 @@ def main() -> int:
         return 2
 
     started = time.monotonic()
-    if args.engine == "markitdown":
+    if args.engine == "translation":
+        from translate_markdown import translate
+        if not args.raw: raise ValueError("翻译需要整理稿")
+        markdown, meta = translate(Path(args.raw), load_env(), Path(args.out))
+    elif args.engine == "layout":
+        from layout_markdown import organize
+        if not args.raw: raise ValueError("整理需要原始提取稿")
+        markdown, meta = organize(src, Path(args.raw), Path(args.out), load_env(), args.max_pages)
+    elif args.engine == "markitdown":
         from markitdown import MarkItDown
         markdown = MarkItDown().convert(str(src)).text_content
         meta = {"engine": "markitdown", "engine_version": "markitdown", "quality": quality_of([markdown]), "suggested": {}, "usage": {}}
@@ -217,5 +226,7 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as exc:
         # API 异常对象可能含请求信息，不将响应或密钥写入日志／前端。
-        print(f"提取失败：{type(exc).__name__}（HTTP {getattr(exc, 'status_code', 'n/a')}）", file=sys.stderr)
+        from translate_markdown import TranslationFailure
+        message = str(exc) if isinstance(exc, TranslationFailure) else f"{type(exc).__name__}（HTTP {getattr(exc, 'status_code', 'n/a')}）"
+        print(f"提取失败：{message}", file=sys.stderr)
         raise SystemExit(1)

@@ -286,6 +286,25 @@ pub fn read_paper_extract(db: State<'_, std::sync::Arc<Db>>, id: String) -> Resu
 }
 
 #[tauri::command]
+pub fn translation_progress(db: State<'_, std::sync::Arc<Db>>, paper_id: String, file_id: Option<String>) -> Result<Option<serde_json::Value>, String> {
+    db.translation_progress(&paper_id,file_id.as_deref())
+}
+
+#[tauri::command]
+pub fn read_translation_blocks(db: State<'_, std::sync::Arc<Db>>, id: String) -> Result<serde_json::Value, String> {
+    db.read_translation_blocks(&id)
+}
+
+#[tauri::command]
+pub fn read_paper_asset(
+    db: State<'_, std::sync::Arc<Db>>,
+    id: String,
+    asset: String,
+) -> Result<Vec<u8>, String> {
+    db.read_paper_asset(&id, &asset)
+}
+
+#[tauri::command]
 pub fn list_tags(db: State<'_, std::sync::Arc<Db>>) -> Result<Vec<crate::models::Tag>, String> {
     db.list_tags()
 }
@@ -347,4 +366,34 @@ pub fn literature_cloud_ready() -> bool {
             })
         })
     })
+}
+
+/// 原生选择后直接入库；取消不写数据，不把所选路径传回前端。
+#[tauri::command]
+pub async fn choose_paper_file(
+    app: tauri::AppHandle,
+    db: State<'_, std::sync::Arc<Db>>,
+    paper_id: String,
+) -> Result<Option<crate::models::PaperFile>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let selected = app
+            .dialog()
+            .file()
+            .set_title("选择文献附件")
+            .blocking_pick_file();
+        let Some(selected) = selected else {
+            return Ok(None);
+        };
+        let path = selected.into_path().map_err(|e| e.to_string())?;
+        db.import_paper_file(crate::models::PaperFileInput {
+            paper_id,
+            src_path: path.to_string_lossy().into_owned(),
+            role: None,
+        })
+        .map(Some)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

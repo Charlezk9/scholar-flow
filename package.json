@@ -1,7 +1,7 @@
 {
   "name": "runningdo",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.2",
   "type": "module",
   "description": "一张纸上的倒计时与日程 · macOS 桌面应用",
   "scripts": {
@@ -18,7 +18,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.12.0",
     "date-fns": "^4.4.0",
-    "katex": "^0.19.0",
+    "katex": "^0.16.47",
     "lucide-react": "^1.49.0",
     "lunar-typescript": "^1.8.6",
     "pdfjs-dist": "^6.3.289",

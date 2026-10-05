@@ -19,6 +19,7 @@ fn focus_main(app: &tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // ---------- 数据库 ----------
             let dir = app.path().app_data_dir()?;
@@ -108,12 +109,16 @@ pub fn run() {
             commands::delete_paper,
             commands::list_paper_files,
             commands::import_paper_file,
+            commands::choose_paper_file,
             commands::delete_paper_file,
             commands::read_paper_file,
             commands::list_paper_extracts,
             commands::save_paper_extract,
             commands::delete_paper_extract,
             commands::read_paper_extract,
+            commands::read_translation_blocks,
+            commands::translation_progress,
+            commands::read_paper_asset,
             commands::list_tags,
             commands::ensure_tag,
             commands::literature_cloud_ready,
