@@ -993,6 +993,10 @@ impl Db {
         engine: &str,
         requested_file: Option<&str>,
     ) -> Result<PaperExtract, String> {
+        self.run_extract_file_traced(paper_id,engine,requested_file,&uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn run_extract_file_traced(&self,paper_id:&str,engine:&str,requested_file:Option<&str>,operation_id:&str)->Result<PaperExtract,String> {
         let engine = engine.trim();
         if !["fast", "glm", "markitdown", "layout", "translation"].contains(&engine) {
             return Err(format!("未知引擎：{engine}"));
@@ -1097,7 +1101,10 @@ impl Db {
         if let Some(raw) = raw {
             command.arg("--raw").arg(raw);
         }
-        let run = command
+        let started=std::time::Instant::now();
+        crate::diagnostics::record(&self.dir,serde_json::json!({"event":"EXTRACT_STARTED","stage":engine,"operationId":operation_id,"attributes":{"paperId":paper_id}}));
+        let mut run = command
+            .env("RD_OPERATION_ID",operation_id)
             .args(["--engine", engine])
             .arg("--in")
             .arg(&abs)
@@ -1106,12 +1113,27 @@ impl Db {
             .arg("--meta")
             .arg(&meta_abs)
             .current_dir(&self.dir)
-            .output()
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .map_err(|e| format!("无法启动提取器（{py}）：{e}"))?;
 
-        if !run.status.success() {
-            let stderr = String::from_utf8_lossy(&run.stderr);
-            let tail: String = stderr
+        use std::io::BufRead;
+        let mut safe_stderr=String::new();
+        if let Some(stderr)=run.stderr.take() {
+            for line in std::io::BufReader::new(stderr).lines().map_while(Result::ok) {
+                if let Some(payload)=line.strip_prefix("RDLOG ") {
+                    if let Ok(mut value)=serde_json::from_str::<serde_json::Value>(payload){if !value.is_object() || !value["attributes"].is_object(){continue;}value["operationId"]=operation_id.into();value["attributes"]["paperId"]=paper_id.into();crate::diagnostics::record(&self.dir,value);}
+                } else {
+                    safe_stderr.push_str(&line);safe_stderr.push('\n');
+                    safe_stderr=safe_stderr.chars().rev().take(600).collect::<String>().chars().rev().collect();
+                }
+            }
+        }
+        let status=run.wait().map_err(|_|"无法读取提取器退出状态")?;
+        crate::diagnostics::record(&self.dir,serde_json::json!({"event":if status.success(){"EXTRACT_DONE"}else{"EXTRACT_FAILED"},"level":if status.success(){"INFO"}else{"ERROR"},"stage":engine,"operationId":operation_id,"attributes":{"paperId":paper_id,"elapsedMs":started.elapsed().as_millis() as u64}}));
+        if !status.success() {
+            let tail: String = safe_stderr
                 .chars()
                 .rev()
                 .take(600)
@@ -1131,7 +1153,7 @@ impl Db {
                 pages: None,
                 chars: None,
                 quality: None,
-                meta: None,
+                meta: Some(serde_json::json!({"diagnosticOperationId":operation_id}).to_string()),
                 error: Some(format!("{}：{}",if engine == "translation" {"翻译失败"} else {"提取失败"},tail.trim().trim_start_matches("提取失败："))),
             });
         }

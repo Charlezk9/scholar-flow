@@ -6,6 +6,7 @@
  *
  * 两种后端：Tauri（真库）与 localStorage（浏览器预览 / 冒烟测试）。
  */
+import { diagnosticInvoke } from "./diagnostics";
 import { inTauri } from "./api";
 
 export interface LibraryNode {
@@ -121,8 +122,7 @@ export function suggestedOf(extract: PaperExtract | null): Record<string, string
 // ---------------------------------------------------------------- Tauri 后端
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<T>(cmd, args);
+  return diagnosticInvoke<T>(cmd, args);
 }
 
 const tauriLit = {

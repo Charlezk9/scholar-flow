@@ -1,3 +1,4 @@
+import {reportError,showDiagnostics} from "../lib/diagnostics";
 /**
  * v1.4 · 文献页（`LIT-01` ~ `LIT-11`）
  *
@@ -166,6 +167,7 @@ export default function LiteraturePage() {
       await reload();
       if (done) notify(done);
     } catch (e) {
+      reportError(e,"literature",undefined,{paperId:paper?.id});
       notify(String(e instanceof Error ? e.message : e));
     } finally {
       busyRef.current = false;
@@ -746,7 +748,7 @@ export default function LiteraturePage() {
                 </div></details>
               </div>
               <div className="lit-translation-action">
-                {translationRunError?.paperId === paper.id && <p className="warn" role="status">{translationRunError.message}</p>}
+                {translationRunError?.paperId === paper.id && <p className="warn" role="status">{translationRunError.message} <button className="btn btn-outline" onClick={showDiagnostics}>查看诊断</button></p>}
               {(!translation || translationError) && <button className="btn btn-outline btn-sm lit-translate" disabled={!latest || busy} title="将整理后的MD交给云模型生成中文学术译稿" onClick={()=>void translatePaper()}>{translating ? "翻译中…" : translationError ? "重新翻译" : "翻译"}</button>}
               </div>
             </div>

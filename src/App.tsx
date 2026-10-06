@@ -10,6 +10,7 @@ import LiteraturePage from "./components/LiteraturePage";
 import EventDrawer from "./components/EventDrawer";
 import CountdownDrawer from "./components/CountdownDrawer";
 import SettingsPage from "./components/SettingsPage";
+import DiagnosticPanel from "./components/DiagnosticPanel";
 import Toast from "./components/Toast";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { inTauri } from "./lib/api";
@@ -98,7 +99,7 @@ export default function App() {
   }, [openCountdownDraft, openEventDraft, goToday]);
 
   if (!ready) {
-    return <div className="loading">正在铺开纸页…</div>;
+    return <><div className="loading">正在铺开纸页…</div><DiagnosticPanel/></>;
   }
 
   return (
@@ -128,6 +129,7 @@ export default function App() {
       <CountdownDrawer />
       <ConfirmDialog />
       <Toast />
+      <DiagnosticPanel />
     </div>
   );
 }

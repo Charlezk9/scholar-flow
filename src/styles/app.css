@@ -3544,3 +3544,17 @@ textarea.field {
 .lit-translation-action { margin-top: 8px; }
 .lit-translation-action:empty { display: none; }
 .lit-translation-action .lit-translate { white-space: nowrap; }
+
+/* 本地诊断反馈：独立浮层，不挤压阅读区域。 */
+.diagnostic-notice {position:fixed;bottom:16px;right:16px;z-index:1100;display:flex;align-items:center;gap:8px;max-width:min(600px,calc(100vw - 32px));padding:12px;background:var(--paper-surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 24px #0002;font-size:calc(13px * var(--font-scale));}
+.diagnostic-notice span {min-width:0;flex:1;overflow-wrap:anywhere;}
+.diagnostic-notice button {flex-shrink:0;}
+.diagnostic-dialog {position:fixed;inset:10vh 10vw;z-index:1200;display:flex;flex-direction:column;gap:12px;min-width:0;padding:20px;background:var(--paper-surface);border:1px solid var(--line);border-radius:12px;font-size:calc(13px * var(--font-scale));}
+.diagnostic-dialog header,.diagnostic-dialog footer {display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.diagnostic-dialog header h3 {flex:1;margin:0;}
+.diagnostic-dialog p {margin:0;overflow-wrap:anywhere;}
+.diagnostic-dialog pre {min-height:0;min-width:0;flex:1;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:calc(12px * var(--font-scale));user-select:text;-webkit-user-select:text;}
+
+.diagnostic-mask {z-index:1199;}
+
+.diagnostic-fallback {padding:32px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;font-size:calc(14px * var(--font-scale));}

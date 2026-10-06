@@ -1,3 +1,4 @@
+import { diagnosticInvoke } from "./diagnostics";
 /**
  * 数据层：Tauri invoke 封装。
  * 在非 Tauri 环境（浏览器 `pnpm dev` 预览）自动降级为 localStorage 内存后端，
@@ -262,7 +263,7 @@ type Backend = {
 };
 
 async function tauriBackend(): Promise<Backend> {
-  const { invoke } = await import("@tauri-apps/api/core");
+  const invoke = diagnosticInvoke;
   return {
     listRoutineSlots: (date) => invoke<RoutineSlot[]>("list_daily_routine_slots", { date }),
     saveRoutineSlot: (date, slotKey, category) => invoke<RoutineSlot>("save_daily_routine_slot", { date, slotKey, category }),

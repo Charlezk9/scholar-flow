@@ -324,10 +324,11 @@ pub async fn extract_paper_markdown(
     paper_id: String,
     engine: String,
     file_id: Option<String>,
+    operation_id: Option<String>,
 ) -> Result<crate::models::PaperExtract, String> {
     let db = db.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        db.run_extract_file(&paper_id, &engine, file_id.as_deref())
+        db.run_extract_file_traced(&paper_id, &engine, file_id.as_deref(),operation_id.as_deref().unwrap_or("unknown"))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -396,4 +397,16 @@ pub async fn choose_paper_file(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn record_diagnostic(db: State<'_, std::sync::Arc<Db>>, record: serde_json::Value) {
+    crate::diagnostics::record(&db.dir, record);
+}
+#[tauri::command]
+pub fn read_diagnostics(db: State<'_, std::sync::Arc<Db>>) -> Result<String,String> {crate::diagnostics::read(&db.dir)}
+#[tauri::command]
+pub fn open_diagnostics_dir(db: State<'_, std::sync::Arc<Db>>) -> Result<(),String> {
+    let path=db.dir.join("logs");std::fs::create_dir_all(&path).map_err(|_|"无法创建日志目录")?;
+    std::process::Command::new("open").arg(path).spawn().map_err(|_|"无法打开日志目录")?;Ok(())
 }

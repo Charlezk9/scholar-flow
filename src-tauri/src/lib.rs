@@ -1,4 +1,5 @@
 mod commands;
+mod diagnostics;
 mod db;
 mod library;
 mod models;
@@ -26,6 +27,10 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let db_path = dir.join("runningdo.db");
             let db = Db::open(db_path).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+            diagnostics::record(&dir,serde_json::json!({"event":"APP_STARTED","stage":"startup"}));
+            let panic_dir=dir.clone();
+            let previous=std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {diagnostics::record(&panic_dir,serde_json::json!({"event":"RUST_PANIC","level":"ERROR","stage":"runtime"}));previous(info);}));
             app.manage(std::sync::Arc::new(db));
 
             // ---------- 菜单栏常驻（MAC-04） ----------
@@ -101,6 +106,9 @@ pub fn run() {
             commands::set_setting,
             commands::export_json,
             commands::data_dir,
+            commands::record_diagnostic,
+            commands::read_diagnostics,
+            commands::open_diagnostics_dir,
             commands::list_library_nodes,
             commands::save_library_node,
             commands::delete_library_node,

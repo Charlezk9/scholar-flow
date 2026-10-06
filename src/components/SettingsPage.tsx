@@ -1,3 +1,4 @@
+import {showDiagnostics} from "../lib/diagnostics";
 import { useState } from "react";
 import {
   Calendar,
@@ -155,6 +156,7 @@ export default function SettingsPage() {
           <h1>{head.title}</h1>
         </div>
         <p className="settings-sub">{head.sub}</p>
+        <button className="btn btn-outline" onClick={showDiagnostics}>诊断日志</button>
 
         {section === "general" ? (
           <div className="settings-cols">
