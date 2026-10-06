@@ -84,6 +84,14 @@ def numeric_residual_ok(source, residual):
     numbers=Counter(re.findall(NUMERIC,residual))
     return not (numbers-aliases)
 
+def numeric_diff(source, residual):
+    """返回脱敏的数字摘要，供模型修复反馈使用，不记录正文。"""
+    source_residual = re.sub(r'RDPROTECT\d+TOKEN', '', source)
+    return {
+        'source': re.findall(NUMERIC, source_residual),
+        'translation': re.findall(NUMERIC, residual),
+    }
+
 
 def protected_equivalent(source,translation):
     _,source_tokens=protect(source);_,target_tokens=protect(translation)
@@ -137,7 +145,7 @@ def validate(batch, data):
         residual = re.sub(r'RDPROTECT\d+TOKEN', '', value)
         source_residual = re.sub(r'RDPROTECT\d+TOKEN', '', block['text'])
         if re.findall(NUMERIC, residual) != re.findall(NUMERIC, source_residual) and not numeric_residual_ok(block['source'],residual):
-            raise ValidationFailure('TRANSLATION_NUMERIC_MISMATCH', block['id'], 'extra_number')
+            raise ValidationFailure('TRANSLATION_NUMERIC_MISMATCH', block['id'], 'extra_number', numeric_diff(block['source'], residual))
         for left,separator,right in re.findall(r'(RDPROTECT\d+TOKEN)([.,eE+\-−–]*)(RDPROTECT\d+TOKEN)',value):
             if left in block['tokens'] and right in block['tokens'] and re.fullmatch(NUMERIC,block['tokens'][left]) and re.fullmatch(NUMERIC,block['tokens'][right]) and left+separator+right not in block['text']:
                 raise ValidationFailure('TRANSLATION_NUMERIC_MISMATCH',block['id'],'numeric_join')
@@ -309,7 +317,9 @@ def translate(raw_path: Path, env: dict, out: Path | None = None):
                     validation_failed = True
                     reason = str(exc) if isinstance(exc, ValidationFailure) else '返回的段落JSON无效'
                     event(getattr(exc,'code','TRANSLATION_FORMAT_FAILED'),'validate',blockId=getattr(exc,'block_id',-1),rule=getattr(exc,'rule','invalid_json'),batchIds=[b['id'] for b in batch],attempt=attempt + 1,**getattr(exc,'details',{}))
-                    feedback = '\n上次输出未通过校验，请仔细保持编号、占位符与段落分隔。' + (f'失败编号{exc.block_id}，规则{exc.rule}。' if isinstance(exc,ValidationFailure) else '')
+                    feedback = '\n上次输出未通过校验。只修正失败段落，保持其他译文不变；数字必须逐项对应，不能新增、删除、改写数值、范围、正负号或科学计数法。' + (f'失败编号{exc.block_id}，规则{exc.rule}。' if isinstance(exc,ValidationFailure) else '')
+                    if isinstance(exc, ValidationFailure) and exc.details.get('source') is not None:
+                        feedback += f'原文数字序列={exc.details["source"]}；译文数字序列={exc.details["translation"]}。'
                 event('TRANSLATION_RETRY','translate',batchIds=[b['id'] for b in batch],attempt=attempt + 1)
                 if attempt == 1:
                     if len(batch)>1 and validation_failed:

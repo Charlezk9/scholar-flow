@@ -4,9 +4,15 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
-from translate_markdown import paragraphs, protect, validate
+from translate_markdown import paragraphs, protect, validate, ValidationFailure
 
 class TranslationTests(unittest.TestCase):
+    def test_numeric_failure_contains_repair_diff(self):
+        batch = self.batch('The result is 28.4 BLEU.')
+        with self.assertRaises(ValidationFailure) as raised:
+            validate(batch, {'blocks': [{'id': 0, 'text': batch[0]['text'] + ' 30'}]})
+        self.assertEqual(raised.exception.rule, 'extra_number')
+        self.assertIn('30', raised.exception.details['translation'])
     def test_semantics_math_tables_code(self):
         source = '<!-- page 1 -->\n\n# Title\n\nA $x_i$.\n\n:::caption\nFigure 1.\n\nSecond caption.\n:::\n\n$$\nx=1\n\ny=2\n$$\n\n```python\nx=1\n\ny=2\n```\n\n| A | B |\n|---|---|\n| 1 | 2 |'
         blocks=paragraphs(source)
