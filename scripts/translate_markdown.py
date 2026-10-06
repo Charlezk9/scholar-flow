@@ -4,6 +4,7 @@ import json
 import re
 import hashlib
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from pathlib import Path
 from diagnostics import event
@@ -248,8 +249,38 @@ def translate(raw_path: Path, env: dict, out: Path | None = None):
         batch.append(block); size += len(block['text'])
     if batch: batches.append(batch)
     try:
+        # 保持默认串行以兼容已有校验/重试语义；部署时可显式设置 2～3 路并发。
+        concurrency = max(1, min(4, int(env.get('GLM_TRANSLATE_CONCURRENCY', '1'))))
+    except ValueError:
+        concurrency = 1
+    try:
         queue = list(batches)
         while queue:
+            if concurrency > 1:
+                wave = queue[:concurrency]
+                del queue[:len(wave)]
+                # 批次之间只共享固定系统提示；结果仍按段落编号合并，失败波次回退串行路径，
+                # 保留原有上下文、重试、拆分与断点语义。
+                def translate_wave(item):
+                    current = item
+                    return current, request_batch(client, model, current, [])
+                failed = []
+                with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                    futures = {pool.submit(translate_wave, item): item for item in wave}
+                    for future in as_completed(futures):
+                        item = futures[future]
+                        try:
+                            _, (values, consumed) = future.result()
+                            translated.update(values)
+                            for name in usage: usage[name] += consumed.get(name, 0)
+                            save()
+                            event('TRANSLATION_BATCH_DONE', 'translate', batchIds=[b['id'] for b in item], completed=len(translated), total=len(blocks), attempt=1, **consumed)
+                        except Exception:
+                            failed.append(item)
+                if failed:
+                    queue[0:0] = failed
+                    concurrency = 1
+                continue
             batch = queue.pop(0)
             if any(len(b['text']) > 18000 for b in batch): raise TranslationFailure('单段过长，请拆分整理稿后翻译')
             prior = [b for b in blocks if b['id'] < batch[0]['id'] and b['id'] in translated][-2:]

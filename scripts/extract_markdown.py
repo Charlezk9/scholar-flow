@@ -22,6 +22,7 @@ import os
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
@@ -116,9 +117,14 @@ def extract_glm(pdf: Path, env: dict[str, str], dpi: int = 200, max_pages: int |
     usage = {"promptTokens": 0, "completionTokens": 0, "pages": 0, "seconds": 0.0}
     started = time.time()
 
-    for index, page in enumerate(doc, start=1):
-        if max_pages and index > max_pages:
-            break
+    pages = [(index, page) for index, page in enumerate(doc, start=1) if not max_pages or index <= max_pages]
+    try:
+        concurrency = max(1, min(8, int(env.get("GLM_CONCURRENCY", "4"))))
+    except ValueError:
+        concurrency = 4
+
+    def extract_page(item):
+        index, page = item
         png = page.get_pixmap(dpi=dpi).tobytes("png")
         b64 = base64.b64encode(png).decode()
         resp = client.chat.completions.create(
@@ -140,10 +146,12 @@ def extract_glm(pdf: Path, env: dict[str, str], dpi: int = 200, max_pages: int |
         content = resp.choices[0].message.content or ""
         if not content.strip():
             raise ValueError("云引擎返回空页")
-        usage["pages"] += 1
+        page_usage = {"promptTokens": 0, "completionTokens": 0}
         if getattr(resp, "usage", None):
-            usage["promptTokens"] += getattr(resp.usage, "prompt_tokens", 0) or 0
-            usage["completionTokens"] += getattr(resp.usage, "completion_tokens", 0) or 0
+            page_usage = {
+                "promptTokens": getattr(resp.usage, "prompt_tokens", 0) or 0,
+                "completionTokens": getattr(resp.usage, "completion_tokens", 0) or 0,
+            }
 
         match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.S)
         if match:
@@ -157,6 +165,20 @@ def extract_glm(pdf: Path, env: dict[str, str], dpi: int = 200, max_pages: int |
                 pass
             content = content[: match.start()].rstrip()
 
+        return index, content, page_usage
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futures = [pool.submit(extract_page, item) for item in pages]
+        for future in as_completed(futures):
+            index, content, page_usage = future.result()
+            results[index] = (content, page_usage)
+
+    for index in sorted(results):
+        content, page_usage = results[index]
+        usage["pages"] += 1
+        usage["promptTokens"] += page_usage["promptTokens"]
+        usage["completionTokens"] += page_usage["completionTokens"]
         texts.append(content)
         parts.append(f"<!-- page {index} -->\n\n{content.strip()}\n")
 
