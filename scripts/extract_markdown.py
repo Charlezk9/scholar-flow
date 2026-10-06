@@ -43,6 +43,21 @@ def load_env() -> dict[str, str]:
     return env
 
 
+def write_progress(out, completed, total):
+    """主协调线程写入；进度是旁路信息，失败不影响产物。"""
+    if out is None or total <= 0:
+        return
+    path = Path(out).with_suffix(".progress.json")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps({"completed": completed, "total": total,
+                                        "updatedAt": int(time.time() * 1000)}))
+        temporary.replace(path)
+    except OSError:
+        pass
+
+
 def quality_of(pages: list[str]) -> dict:
     text = "\n".join(pages)
     cid = text.count("(cid:")
@@ -61,16 +76,18 @@ def quality_of(pages: list[str]) -> dict:
 # ---------------------------------------------------------------- fast
 
 
-def extract_fast(pdf: Path) -> tuple[str, dict]:
+def extract_fast(pdf: Path, out: Path | None = None) -> tuple[str, dict]:
     import pymupdf  # noqa: PLC0415
 
     doc = pymupdf.open(pdf)
     parts: list[str] = []
     pages: list[str] = []
+    write_progress(out, 0, len(doc))
     for index, page in enumerate(doc, start=1):
         text = page.get_text("text")
         pages.append(text)
         parts.append(f"<!-- page {index} -->\n\n{text.strip()}\n")
+        write_progress(out, index, len(doc))
     meta_title = (doc.metadata or {}).get("title") or ""
     suggested = {"title": meta_title.strip() or pdf.stem, "venue": "", "authors": "", "year": "", "doi": ""}
     meta = {
@@ -99,7 +116,7 @@ PROMPT = """你是论文解析器。把这一页学术论文转成结构良好�
 """
 
 
-def extract_glm(pdf: Path, env: dict[str, str], dpi: int = 200, max_pages: int | None = None) -> tuple[str, dict]:
+def extract_glm(pdf: Path, env: dict[str, str], dpi: int = 200, max_pages: int | None = None, out: Path | None = None) -> tuple[str, dict]:
     import pymupdf  # noqa: PLC0415
     from openai import OpenAI  # noqa: PLC0415
 
@@ -168,11 +185,13 @@ def extract_glm(pdf: Path, env: dict[str, str], dpi: int = 200, max_pages: int |
         return index, content, page_usage
 
     results = {}
+    write_progress(out, 0, len(pages))
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [pool.submit(extract_page, item) for item in pages]
         for future in as_completed(futures):
             index, content, page_usage = future.result()
             results[index] = (content, page_usage)
+            write_progress(out, len(results), len(pages))
 
     for index in sorted(results):
         content, page_usage = results[index]
@@ -231,9 +250,9 @@ def main() -> int:
         markdown = MarkItDown().convert(str(src)).text_content
         meta = {"engine": "markitdown", "engine_version": "markitdown", "quality": quality_of([markdown]), "suggested": {}, "usage": {}}
     elif args.engine == "fast":
-        markdown, meta = extract_fast(src)
+        markdown, meta = extract_fast(src, Path(args.out))
     else:
-        markdown, meta = extract_glm(src, load_env(), dpi=args.dpi, max_pages=args.max_pages)
+        markdown, meta = extract_glm(src, load_env(), dpi=args.dpi, max_pages=args.max_pages, out=Path(args.out))
 
     meta.setdefault("usage", {})["totalSeconds"] = round(time.monotonic() - started, 3)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

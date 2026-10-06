@@ -286,6 +286,11 @@ pub fn read_paper_extract(db: State<'_, std::sync::Arc<Db>>, id: String) -> Resu
 }
 
 #[tauri::command]
+pub fn extraction_progress(db: State<'_, std::sync::Arc<Db>>, paper_id: String, file_id: String, engine: String) -> Result<Option<serde_json::Value>, String> {
+    db.extraction_progress(&paper_id,&file_id,&engine)
+}
+
+#[tauri::command]
 pub fn translation_progress(db: State<'_, std::sync::Arc<Db>>, paper_id: String, file_id: Option<String>) -> Result<Option<serde_json::Value>, String> {
     db.translation_progress(&paper_id,file_id.as_deref())
 }

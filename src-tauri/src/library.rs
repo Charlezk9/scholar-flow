@@ -654,6 +654,9 @@ impl Db {
             if let Ok(abs) = resolve_inside(&self.dir, &rel) {
                 // 提取稿与 PDF 同主干名：删附件时一并清掉，避免留下孤儿产物
                 for suffix in [
+                    ".fast.progress.json",
+                    ".glm.progress.json",
+                    ".layout.progress.json",
                     ".fast.md",
                     ".glm.md",
                     ".fast.meta.json",
@@ -661,6 +664,7 @@ impl Db {
                     ".markitdown.md",
                     ".markitdown.meta.json",
                     ".layout.md",
+                    ".layout.progress.json",
                     ".translation.md",
                     ".translation.meta.json",
                     ".translation.checkpoint.json",
@@ -826,6 +830,20 @@ impl Db {
         };
         let abs = resolve_inside(&self.dir, &rel)?;
         std::fs::read_to_string(&abs).map_err(|e| format!("读取产物失败: {e}"))
+    }
+
+    pub fn extraction_progress(&self, paper_id: &str, file_id: &str, engine: &str) -> Result<Option<serde_json::Value>, String> {
+        if !["fast", "glm", "layout", "markitdown"].contains(&engine) { return Err("无效引擎".into()); }
+        let file = self.list_paper_files()?.into_iter()
+            .find(|f| f.paper_id == paper_id && f.id == file_id).ok_or("源附件不存在")?;
+        let path = resolve_inside(&self.dir, &extract_md_rel(&file.rel_path,engine))?.with_extension("progress.json");
+        let path = resolve_inside(&self.dir, &rel_to_dir(&self.dir,&path))?;
+        let Ok(text) = std::fs::read_to_string(path) else {return Ok(None);};
+        let data: serde_json::Value = serde_json::from_str(&text).map_err(|_| "进度数据无效")?;
+        let completed = data["completed"].as_u64().ok_or("进度数据无效")?;
+        let total = data["total"].as_u64().filter(|n| *n > 0 && *n >= completed).ok_or("进度数据无效")?;
+        let updated = data["updatedAt"].as_u64().ok_or("进度数据无效")?;
+        Ok(Some(serde_json::json!({"completed":completed,"total":total,"updatedAt":updated})))
     }
 
     pub fn translation_progress(&self, paper_id: &str, file_id: Option<&str>) -> Result<Option<serde_json::Value>, String> {
@@ -1516,6 +1534,13 @@ mod tests {
         assert_eq!(db.read_translation_blocks(&cached.id).unwrap()[0]["translation"],"中文");
         assert!(!cached.meta.unwrap().contains("English"));
         let progress_path=dir.join(&translated_rel).with_extension("progress.json");
+        let extract_progress_path=dir.join(&layout_rel).with_extension("progress.json");
+        std::fs::write(&extract_progress_path,serde_json::json!({"completed":2,"total":5,"updatedAt":42}).to_string()).unwrap();
+        assert_eq!(db.extraction_progress(&paper.id,&file.id,"layout").unwrap().unwrap()["completed"],2);
+        assert!(db.extraction_progress("other-paper",&file.id,"layout").is_err());
+        assert!(db.extraction_progress(&paper.id,&file.id,"../glm").is_err());
+        std::fs::write(&extract_progress_path,serde_json::json!({"completed":6,"total":5,"updatedAt":42}).to_string()).unwrap();
+        assert!(db.extraction_progress(&paper.id,&file.id,"layout").is_err());
         let checkpoint_path=dir.join(&translated_rel).with_extension("checkpoint.json");
         std::fs::write(&progress_path,serde_json::json!({"completed":1,"total":3,"stage":"retrying","updatedAt":1}).to_string()).unwrap();
         std::fs::write(&checkpoint_path,"{}").unwrap();

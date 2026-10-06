@@ -126,6 +126,7 @@ pub fn run() {
             commands::read_paper_extract,
             commands::read_translation_blocks,
             commands::translation_progress,
+            commands::extraction_progress,
             commands::read_paper_asset,
             commands::list_tags,
             commands::ensure_tag,

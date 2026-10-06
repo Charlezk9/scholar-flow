@@ -65,7 +65,7 @@ PROMPT = '''你只分类学术论文原稿区块，不改写正文，不恢复�
 def organize(src: Path, raw_path: Path, out: Path, env: dict, max_pages=None):
     import pymupdf
     from openai import OpenAI
-    from extract_markdown import DEFAULT_MODEL, DEFAULT_BASE_URL, quality_of
+    from extract_markdown import DEFAULT_MODEL, DEFAULT_BASE_URL, quality_of, write_progress
     key = env.get("GLM_API_KEY", "").strip()
     if not key: raise ValueError("缺少云整理密钥")
     model = env.get("GLM_MODEL", DEFAULT_MODEL); endpoint = env.get("GLM_BASE_URL", DEFAULT_BASE_URL)
@@ -77,6 +77,7 @@ def organize(src: Path, raw_path: Path, out: Path, env: dict, max_pages=None):
     labels = {}; images = {}; assets = []; started = time.monotonic()
     usage = {"promptTokens": 0, "completionTokens": 0}
     page_ids = sorted({b['page'] for b in blocks})
+    write_progress(out, 0, len(page_ids))
     asset_dir = out.with_suffix('.assets')
     for start in range(0, len(page_ids), 3):
         pages = page_ids[start:start + 3]
@@ -115,6 +116,7 @@ def organize(src: Path, raw_path: Path, out: Path, env: dict, max_pages=None):
             relative = f'{asset_dir.name}/{path.name}'
             images[caption_id] = quote(relative, safe="/")
             assets.append({"path":relative,"page":number,"captionBlock":caption_id,"bbox":[clip.x0/r.width,clip.y0/r.height,clip.x1/r.width,clip.y1/r.height]})
+        write_progress(out, start + len(pages), len(page_ids))
     if pdf: pdf.close()
     markdown = render_blocks(blocks, labels, images)
     usage.update(seconds=round(time.monotonic()-started,3), estimatedCost=None, currency='unknown')

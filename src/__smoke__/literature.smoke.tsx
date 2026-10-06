@@ -263,8 +263,14 @@ async function main() {
   lit.readExtract = async id => id === final.id ? "# 预览模式\n\n提取完成后的正文" : originalRead(id);
   await React.act(async () => { click(q(".lit-extract-fast")); });
   ok("处理中显示不定量进度条", !!q(".lit-progress.is-running progress") && !q(".lit-progress progress")?.hasAttribute("value"));
+  const savedExtractionProgress = lit.extractionProgress;
+  lit.extractionProgress = async () => ({completed: 2, total: 5, updatedAt: Date.now()});
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 850)); });
+  ok("提取显示真实页数与百分比", text(q(".lit-progress")).includes("2/5 页（40%）") && q(".lit-progress progress")?.getAttribute("value") === "2");
+  lit.extractionProgress = savedExtractionProgress;
   await React.act(async () => { finish(success); }); await flush();
   ok("原稿不开放阅读，自动排版仍在进行", (q(".lit-tab-md") as HTMLButtonElement).disabled && !!q(".lit-progress.is-organizing"));
+  ok("切换整理阶段清空提取百分比", !q(".lit-progress progress")?.hasAttribute("value"));
   ok("内部原稿没有查看入口", !q(".lit-extract button"));
   await React.act(async () => { finish(final); }); await flush();
   ok("成功后收起进度条", !q(".lit-progress"));

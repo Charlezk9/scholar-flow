@@ -64,6 +64,7 @@ export interface PaperFile {
   updatedAt: string;
 }
 
+export type ExtractionProgress = {completed: number; total: number; updatedAt: number};
 export type TranslationProgress = {completed: number; total: number; stage: "translating" | "retrying" | "failed" | "done"; updatedAt: number};
 
 export type TranslationPair = {id: number; source: string; translation: string};
@@ -148,6 +149,7 @@ const tauriLit = {
     call<PaperExtract>("extract_paper_markdown", { paperId, engine, fileId }),
   deleteExtract: (id: string) => call<void>("delete_paper_extract", { id }),
   readExtract: (id: string) => call<string>("read_paper_extract", { id }),
+  extractionProgress: (paperId: string, fileId: string, engine: string) => call<ExtractionProgress | null>("extraction_progress", {paperId,fileId,engine}),
   translationProgress: (paperId: string, fileId?: string) => call<TranslationProgress | null>("translation_progress", {paperId,fileId}),
   readTranslation: (id: string) => call<TranslationPair[]>("read_translation_blocks", { id }),
   readAsset: (id: string, asset: string) => call<number[]>("read_paper_asset", { id, asset }),
@@ -186,6 +188,7 @@ function previewLit() {
   const write = (data: PreviewStore) => localStorage.setItem(LS_KEY, JSON.stringify(data));
 
   return {
+    extractionProgress: async (_paperId: string, _fileId: string, _engine: string): Promise<ExtractionProgress | null> => null,
     translationProgress: async (_paperId: string, _fileId?: string): Promise<TranslationProgress | null> => null,
     readTranslation: async (_id: string): Promise<TranslationPair[]> => {throw new Error("预览没有翻译映射文件");},
     readAsset: async (_id: string, _asset: string): Promise<number[]> => { throw new Error("预览没有图片资产"); },

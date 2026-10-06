@@ -79,6 +79,21 @@ export default function LiteraturePage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [readerView, setReaderView] = useState<"pdf" | "md" | "zh" | "parallel">("pdf");
   const [progress, setProgress] = useState<{ paperId: string; status: "running" | "organizing" | "done" | "failed" } | null>(null);
+  const [extractRun, setExtractRun] = useState<{paperId: string; fileId: string; engine: string; startedAt: number} | null>(null);
+  const [extractCount, setExtractCount] = useState<import("../lib/literature").ExtractionProgress | null>(null);
+  useEffect(() => {
+    if (!extractRun) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const value = await lit.extractionProgress(extractRun.paperId, extractRun.fileId, extractRun.engine);
+        if (!cancelled && value && value.updatedAt >= extractRun.startedAt) setExtractCount(value);
+      } catch { /* 查询失败不影响转换。 */ }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 750);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [extractRun]);
   const titleInput = useRef<HTMLInputElement>(null);
   const busyRef = useRef(false);
   const [readerFont, setReaderFont] = useState(16);
@@ -290,17 +305,22 @@ export default function LiteraturePage() {
       setProgress({ paperId: paper.id, status: "running" });
       try {
         const actualEngine = /\.(docx|pptx)$/i.test(file.relPath) ? "markitdown" : engine;
-        let result = await lit.extract(paper.id, actualEngine, file.id);
+        const extract = (nextEngine: typeof actualEngine | "layout") => {
+          setExtractCount(null);
+          setExtractRun({paperId: paper.id, fileId: file.id, engine: nextEngine, startedAt: Date.now()});
+          return lit.extract(paper.id, nextEngine, file.id);
+        };
+        let result = await extract(actualEngine);
         if (result.status === "failed" && allowFallback && actualEngine === "glm") {
           notify("云提取失败，正在改用本地快线");
-          result = await lit.extract(paper.id, "fast", file.id);
+          result = await extract("fast");
         }
         if (result.status !== "done") throw new Error(result.error || "未生成提取稿");
         // 原始产物只供内部整理使用，必须完成排版才开放 MD 阅读。
         await reload();
         if (!await lit.cloudReady()) throw new Error("尚未配置自动排版服务，请配置后重试");
         setProgress({ paperId: paper.id, status: "organizing" });
-        const organized = await lit.extract(paper.id, "layout", file.id);
+        const organized = await extract("layout");
         if (organized.status !== "done") throw new Error(organized.error || "自动排版失败");
         if (requestedFile && selectedRef.current === paper.id) {
           const content = await lit.readExtract(organized.id);
@@ -314,6 +334,9 @@ export default function LiteraturePage() {
         setProgress({ paperId: paper.id, status: "failed" });
         await reload();
         throw error;
+      } finally {
+        setExtractRun(null);
+        setExtractCount(null);
       }
     });
 
@@ -601,7 +624,7 @@ export default function LiteraturePage() {
             <button className="btn btn-outline btn-sm lit-details-toggle" aria-expanded={detailsOpen && !!paper} aria-controls="lit-details" disabled={!paper} title={detailsOpen ? "关闭文献详情" : "展开文献详情"} aria-label="文献详情" onClick={toggleDetails}>{detailsOpen ? ">" : "<"}</button>
           </header>
           {translating === paper?.id && <div className="lit-progress" role="status"><progress aria-label="论文中文翻译进度" max={translationCount?.total} value={translationCount?.completed}/><span>{translationCount ? `${translationCount.stage === "retrying" ? "正在重试当前批次，" : "正在翻译，"}已完成 ${translationCount.completed}/${translationCount.total} 段` : "正在连接翻译服务…"}</span></div>}
-          {progress && progress.status !== "done" && progress.paperId === paper?.id && <div className={`lit-progress is-${progress.status}`} role="status"><progress aria-label="PDF 转 MD 进度" max={100} value={progress.status === "failed" ? 0 : undefined} /><span>{progress.status === "running" ? "正在提取，请稍候…" : progress.status === "organizing" ? "正在自动整理排版…" : "转换未完成，请在文献详情重试"}</span></div>}
+          {progress && progress.status !== "done" && progress.paperId === paper?.id && <div className={`lit-progress is-${progress.status}`} role="status"><progress aria-label="PDF 转 MD 进度" max={extractCount?.total ?? 100} value={progress.status === "failed" ? 0 : extractCount?.completed} /><span>{progress.status === "running" ? (extractCount ? `正在提取，已完成 ${extractCount.completed}/${extractCount.total} 页（${Math.floor(extractCount.completed / extractCount.total * 100)}%）` : "正在提取，请稍候…") : progress.status === "organizing" ? (extractCount ? `正在自动整理排版，已完成 ${extractCount.completed}/${extractCount.total} 页（${Math.floor(extractCount.completed / extractCount.total * 100)}%）` : "正在自动整理排版…") : "转换未完成，请在文献详情重试"}</span></div>}
           <div className={`lit-editor-body ${readerView === "pdf" ? "is-pdf" : ""}`}>
             {!paper ? <p className="lit-empty">从左侧选择文献，或点击「新建文献项目」。</p> : readerView === "pdf" ? pdfBytes ? <PdfReader bytes={pdfBytes} toolbar={toolbar} /> : <p className="lit-empty">{pdfError || (pdfFile ? "正在读取 PDF…" : "还没有 PDF，打开右侧「文献详情」导入附件。")}</p> : readerView === "zh" || readerView === "parallel" ? translationText !== null ? readerView === "parallel" ? <TranslationReader pairs={pairs} fontSize={readerFont} extractId={mdExtractId}/> : <MarkdownReader text={translationText} fontSize={readerFont} extractId={mdExtractId}/> : <p className="lit-empty">{translationError || (translation ? "正在读取中文译稿…" : "中文译稿尚未生成，请点击翻译。")}</p> : md !== null ? <MarkdownReader text={md} fontSize={readerFont} extractId={mdExtractId} /> : <p className="lit-empty">{mdError || (latest ? "正在读取 Markdown…" : "Markdown 尚未完成排版，请在文献详情重试。")}</p>}
           </div>
