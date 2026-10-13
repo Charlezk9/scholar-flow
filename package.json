@@ -1,7 +1,7 @@
 {
   "name": "runningdo",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.5.1",
   "type": "module",
   "description": "一张纸上的倒计时与日程 · macOS 桌面应用",
   "scripts": {
@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",
-    "smoke": "node scripts/smoke-build.mjs && node node_modules/.smoke/pickers.mjs && node node_modules/.smoke/delete.mjs && node node_modules/.smoke/drawer.mjs && node node_modules/.smoke/font.mjs && node node_modules/.smoke/crown.mjs && node node_modules/.smoke/milestones.mjs && node node_modules/.smoke/drawer-countdown.mjs && node node_modules/.smoke/calendar-header.mjs && node node_modules/.smoke/card.mjs && node node_modules/.smoke/agenda.mjs && node node_modules/.smoke/v13.mjs && node node_modules/.smoke/literature.mjs && node node_modules/.smoke/reading.mjs && node node_modules/.smoke/diagnostics.mjs",
+    "smoke": "node scripts/smoke-build.mjs && node node_modules/.smoke/pickers.mjs && node node_modules/.smoke/delete.mjs && node node_modules/.smoke/drawer.mjs && node node_modules/.smoke/font.mjs && node node_modules/.smoke/crown.mjs && node node_modules/.smoke/milestones.mjs && node node_modules/.smoke/drawer-countdown.mjs && node node_modules/.smoke/calendar-header.mjs && node node_modules/.smoke/card.mjs && node node_modules/.smoke/agenda.mjs && node node_modules/.smoke/v13.mjs && node node_modules/.smoke/literature.mjs && node node_modules/.smoke/literature-task.mjs && node node_modules/.smoke/reading.mjs && node node_modules/.smoke/diagnostics.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm smoke",
     "tauri": "tauri",
     "app": "tauri dev"

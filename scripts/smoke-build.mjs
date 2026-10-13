@@ -25,6 +25,7 @@ await build({
         agenda: "src/__smoke__/agenda.smoke.tsx",
         v13: "src/__smoke__/v13.smoke.tsx",
         literature: "src/__smoke__/literature.smoke.tsx",
+        "literature-task": "src/__smoke__/literature-task.smoke.tsx",
         diagnostics: "src/__smoke__/diagnostics.smoke.tsx",
         reading: "src/__smoke__/reading.smoke.tsx",
       },

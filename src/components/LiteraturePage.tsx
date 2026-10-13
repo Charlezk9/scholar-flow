@@ -23,6 +23,7 @@ import {
 } from "../lib/literature";
 import { api } from "../lib/api";
 import PdfReader from "./PdfReader";
+import LiteratureTaskProgress, {type LiteratureTaskView} from "./LiteratureTaskProgress";
 import MarkdownReader from "./MarkdownReader";
 import TranslationReader, {translationPairs, translationSourceMatches, type TranslationPair} from "./TranslationReader";
 import { confirmThen, useStore } from "../store/useStore";
@@ -338,6 +339,7 @@ export default function LiteraturePage() {
       }
       const file = requestedFile ?? paperFiles.find(f => /\.pdf$/i.test(f.relPath)) ?? paperFiles[0];
       if (!file) throw new Error("请先导入附件");
+      setTranslationRunError(null);
       setProgress({ paperId: paper.id, status: "running" });
       try {
         const actualEngine = /\.(docx|pptx)$/i.test(file.relPath) ? "markitdown" : engine;
@@ -365,7 +367,7 @@ export default function LiteraturePage() {
           }
         }
         setProgress({ paperId: paper.id, status: "done" });
-        notify(`Markdown 已完成排版：${organized.pages ?? "?"} 页 / ${organized.chars ?? "?"} 字符`);
+        notify(`「${paper.title}」Markdown 已完成排版：${organized.pages ?? "?"} 页 / ${organized.chars ?? "?"} 字符`);
       } catch (error) {
         setProgress({ paperId: paper.id, status: "failed" });
         await reload();
@@ -461,7 +463,7 @@ export default function LiteraturePage() {
       if (!translationPairs({...result,meta:JSON.stringify({...JSON.parse(result.meta ?? "{}"),blocks})}, latest.id).length) throw new Error("翻译段落映射无效，请重试");
       if (activePaperId.current === paper.id) setReaderView("zh");
     } catch(e) {setTranslationRunError({paperId:paper.id,message:String(e)});throw e;} finally {setTranslating(null);}
-  }, "中文翻译完成");
+  }, paper ? `「${paper.title}」中文翻译完成` : undefined);
   const suggested = suggestedOf(latest);
   const pdfFile = paperFiles.find(f => /\.pdf$/i.test(f.relPath) && !f.missing);
   useEffect(() => {
@@ -591,6 +593,18 @@ export default function LiteraturePage() {
       setRename(null);
     },"名称已更新",false);
   };
+  const taskTitle = (id: string) => papers.find(item => item.id === id)?.title ?? "文献";
+  const taskView: LiteratureTaskView | null = translating
+    ? {paperId:translating,title:taskTitle(translating),phase:"translating",count:translationCount}
+    : translationRunError
+      ? {paperId:translationRunError.paperId,title:taskTitle(translationRunError.paperId),phase:"failed",error:translationRunError.message}
+      : progress && progress.status !== "done"
+        ? {paperId:progress.paperId,title:taskTitle(progress.paperId),phase:progress.status,count:extractCount}
+        : null;
+  const returnToTask = (id: string) => {
+    setSelectedId(id);reveal(id);
+    if (taskView?.phase === "failed") setDetailsOpen(true);
+  };
   const destinationTree = (parent:string|null,depth=0): React.ReactNode => (treeIndex.children.get(parent) ?? []).map(node=><div key={node.id}><div className="lit-destination-row" style={{paddingLeft:depth*14}}><button className="lit-folder-chevron" aria-label={`${moveCollapsed.has(node.id) ? "展开" : "折叠"}${node.name}`} onClick={()=>setMoveCollapsed(previous=>{const next=new Set(previous);if(next.has(node.id)) next.delete(node.id);else next.add(node.id);return next;})}>{moveCollapsed.has(node.id) ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}</button><button className={`lit-node ${moveCard?.target===node.id ? "is-on" : ""}`} disabled={invalidDestination(node.id)} title={directoryPath(node.id)} onClick={()=>moveCard && setMoveCard({...moveCard,target:node.id})}><Folder size={14}/>{node.name}</button></div>{!moveCollapsed.has(node.id) && destinationTree(node.id,depth+1)}</div>);
   const renderFolder = (id: string, name: string, depth: number) => {
     const children = id === "none" ? [] : treeIndex.children.get(id) ?? [];
@@ -661,8 +675,7 @@ export default function LiteraturePage() {
             {readerView !== "pdf" && <div className="lit-reader-font" role="group" aria-label="MD 阅读字号"><button className="btn btn-outline btn-sm" aria-label="减小阅读字号" disabled={readerFont <= 12} onClick={() => setReaderFont(Math.max(12, readerFont-2))}>−</button><button className="btn btn-outline btn-sm" aria-label="恢复阅读字号" onClick={() => setReaderFont(16)}>{readerFont}</button><button className="btn btn-outline btn-sm" aria-label="增大阅读字号" disabled={readerFont >= 28} onClick={() => setReaderFont(Math.min(28, readerFont+2))}>＋</button></div>}
             <button className="btn btn-outline btn-sm lit-details-toggle" aria-expanded={detailsOpen && !!paper} aria-controls="lit-details" disabled={!paper} title={detailsOpen ? "关闭文献详情" : "展开文献详情"} aria-label="文献详情" onClick={toggleDetails}>{detailsOpen ? ">" : "<"}</button>
           </header>
-          {translating === paper?.id && <div className="lit-progress" role="status"><progress aria-label="论文中文翻译进度" max={translationCount?.total} value={translationCount?.completed}/><span>{translationCount ? `${translationCount.stage === "retrying" ? "正在重试当前批次，" : "正在翻译，"}已完成 ${translationCount.completed}/${translationCount.total} 段` : "正在连接翻译服务…"}</span></div>}
-          {progress && progress.status !== "done" && progress.paperId === paper?.id && <div className={`lit-progress is-${progress.status}`} role="status"><progress aria-label="PDF 转 MD 进度" max={extractCount?.total ?? 100} value={progress.status === "failed" ? 0 : extractCount?.completed} /><span>{progress.status === "running" ? (extractCount ? `正在提取，已完成 ${extractCount.completed}/${extractCount.total} 页（${Math.floor(extractCount.completed / extractCount.total * 100)}%）` : "正在提取，请稍候…") : progress.status === "organizing" ? (extractCount ? `正在自动整理排版，已完成 ${extractCount.completed}/${extractCount.total} 页（${Math.floor(extractCount.completed / extractCount.total * 100)}%）` : "正在自动整理排版…") : "转换未完成，请在文献详情重试"}</span></div>}
+          <LiteratureTaskProgress task={taskView} selectedId={selectedId} onReturn={returnToTask}/>
           <div className={`lit-editor-body ${readerView === "pdf" ? "is-pdf" : ""}`}>
             {!paper ? <p className="lit-empty">从左侧选择文献，或点击「新建文献项目」。</p> : readerView === "pdf" ? pdfBytes ? <PdfReader bytes={pdfBytes} toolbar={toolbar} /> : <p className="lit-empty">{pdfError || (pdfFile ? "正在读取 PDF…" : "还没有 PDF，打开右侧「文献详情」导入附件。")}</p> : readerView === "zh" || readerView === "parallel" ? translationText !== null ? readerView === "parallel" ? <TranslationReader pairs={pairs} fontSize={readerFont} extractId={mdExtractId}/> : <MarkdownReader text={translationText} fontSize={readerFont} extractId={mdExtractId}/> : <p className="lit-empty">{translationError || (translation ? "正在读取中文译稿…" : "中文译稿尚未生成，请点击翻译。")}</p> : md !== null ? <MarkdownReader text={md} fontSize={readerFont} extractId={mdExtractId} /> : <p className="lit-empty">{mdError || (latest ? "正在读取 Markdown…" : "Markdown 尚未完成排版，请在文献详情重试。")}</p>}
           </div>
@@ -810,7 +823,7 @@ export default function LiteraturePage() {
               </div>
               <div className="lit-translation-action">
                 {translationRunError?.paperId === paper.id && <p className="warn" role="status">{translationRunError.message} <button className="btn btn-outline" onClick={showDiagnostics}>查看诊断</button></p>}
-              {(!translation || translationError) && <button className="btn btn-outline btn-sm lit-translate" disabled={!latest || busy} title="将整理后的MD交给云模型生成中文学术译稿" onClick={()=>void translatePaper()}>{translating ? "翻译中…" : translationError ? "重新翻译" : "翻译"}</button>}
+              {(!translation || translationError) && <button className="btn btn-outline btn-sm lit-translate" disabled={!latest || busy} title="将整理后的MD交给云模型生成中文学术译稿" onClick={()=>void translatePaper()}>{translating === paper.id ? "翻译中…" : translationError ? "重新翻译" : "翻译"}</button>}
               </div>
             </div>
             <div className="lit-detail-section"><h3>建议元数据</h3>

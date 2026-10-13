@@ -1,0 +1,88 @@
+import {setupDom, section, ok, report, q, qa, text, click, byText, sleep} from "./harness";
+import type {PaperExtract} from "../lib/literature";
+setupDom();
+
+async function main() {
+  const React = await import("react");
+  const {createRoot} = await import("react-dom/client");
+  const {lit, resetPreviewLiterature} = await import("../lib/literature");
+  const {api} = await import("../lib/api");
+  const {useStore, DEFAULT_SETTINGS, applyTheme} = await import("../store/useStore");
+  const {default: LiteraturePage} = await import("../components/LiteraturePage");
+  localStorage.clear();resetPreviewLiterature();
+  await React.act(async()=>{applyTheme(DEFAULT_SETTINGS);await useStore.getState().init();});
+  const a = await lit.savePaper({title:"任务论文 A",nodeId:null,kind:"paper"});
+  const b = await lit.savePaper({title:"阅读论文 B",nodeId:null,kind:"paper"});
+  const file = await lit.importFile({paperId:a.id,srcPath:"/tmp/task-a.pdf"});
+  localStorage.setItem("runningdo.literature.browse.v1",JSON.stringify({folder:"none",selectedId:a.id,collapsed:[],scroll:0}));
+  await api.setSetting("literature.cloudConsent.glm","true");
+  lit.cloudReady = async()=>true;
+  let results: PaperExtract[]=[];
+  const calls: {paperId:string;engine:string;fileId?:string}[]=[];
+  let finish!: (value:PaperExtract)=>void;
+  lit.extract = (paperId,engine,fileId)=>{
+    calls.push({paperId,engine,fileId});
+    return new Promise(resolve=>{finish=value=>{if(value.status==="done") results=[value,...results];resolve(value);};});
+  };
+  lit.listExtracts = async()=>results;
+  lit.readExtract = async id=>id==="translation-a" ? "# A 的中文译文" : "# A 的整理稿";
+  lit.readTranslation = async()=>[{id:0,source:"# A 的整理稿",translation:"# A 的中文译文"}];
+  lit.extractionProgress = async()=>({completed:1,total:3,updatedAt:Date.now()});
+  lit.translationProgress = async()=>({completed:1,total:2,stage:"translating",updatedAt:Date.now()});
+  const extract = (id:string,engine:string):PaperExtract=>({id,paperId:a.id,fileId:file.id,engine,engineVersion:"test",sourceSha256:"test",relPath:`${id}.md`,status:"done",pages:3,chars:100,quality:null,meta:null,error:null,createdAt:"",updatedAt:""});
+  const raw=extract("raw-a","fast"),layout=extract("layout-a","layout");
+  const root=createRoot(document.getElementById("root")!);
+  const flush=async()=>{await React.act(async()=>{await sleep(0);});};
+  const select=async(id:string)=>{await React.act(async()=>{click(qa(".lit-item").find(el=>el.dataset.paperId===id)!);});await flush();};
+  const run=async(selector:string)=>{await React.act(async()=>{click(q(selector));});await flush();};
+  await React.act(async()=>{root.render(React.createElement(LiteraturePage));});await flush();
+  await run(".lit-details-toggle");
+
+  section("提取及排版过程中切换文献");
+  await run(".lit-extract-fast");
+  await select(b.id);
+  ok("切到B仍显示A任务及真实进度",text(q(".lit-reader-title"))===b.title && text(q(".lit-task-title")).includes(a.title) && text(q(".lit-task-status")).includes("1/3"));
+  ok("任务进度关联A而非当前阅读对象",q(".lit-progress")?.dataset.taskPaperId===a.id);
+  ok("切换不重复启动提取",calls.length===1 && calls[0].paperId===a.id && calls[0].fileId===file.id);
+  await run(".lit-task-return");
+  ok("返回任务文献仅切换阅读对象",text(q(".lit-reader-title"))===a.title && !q(".lit-task-return") && calls.length===1);
+  await select(b.id);
+  await React.act(async()=>{finish(raw);});await flush();
+  ok("停留B时仍串接A的排版",text(q(".lit-reader-title"))===b.title && !!q(".lit-progress.is-organizing") && calls[1]?.paperId===a.id && calls[1]?.engine==="layout");
+  await React.act(async()=>{finish(layout);});await flush();
+  ok("后台排版完成不抢回A",text(q(".lit-reader-title"))===b.title && !q(".lit-progress"));
+  ok("A的产物不挂到B",(q(".lit-tab-md") as HTMLButtonElement).disabled && !text(q(".lit-editor-body")).includes("A 的整理稿"));
+  ok("完成提示注明任务文献",(useStore.getState().toast ?? "").includes(a.title));
+  await select(a.id);await run(".lit-tab-md");
+  ok("回到A可阅读其排版结果",text(q(".lit-md")).includes("A 的整理稿"));
+
+  section("翻译过程中切换文献");
+  await run(".lit-translate");
+  await select(b.id);
+  ok("切到B翻译进度仍归属A",text(q(".lit-task-title")).includes(a.title) && text(q(".lit-progress")).includes("1/2 段"));
+  ok("B不被误标为翻译中",text(q(".lit-translate"))==="翻译" && (q(".lit-translate") as HTMLButtonElement).disabled);
+  await run(".lit-task-return");await select(b.id);
+  const translated={...extract("translation-a","translation"),meta:JSON.stringify({sourceExtractId:layout.id})};
+  await React.act(async()=>{finish(translated);});await flush();
+  ok("翻译完成不切换B的阅读视图",text(q(".lit-reader-title"))===b.title && q(".lit-tab-pdf")?.getAttribute("aria-pressed")==="true" && !q(".lit-md"));
+  ok("B的中文入口不接收A译稿",(q(".lit-tab-zh") as HTMLButtonElement).disabled);
+  ok("翻译仅对A发起一次",calls.filter(c=>c.engine==="translation").length===1 && calls.at(-1)?.paperId===a.id);
+  await select(a.id);await run(".lit-tab-zh");
+  ok("返回A可读取完成译稿",text(q(".lit-md")).includes("A 的中文译文"));
+
+  section("切换后失败仍可定位原文献");
+  results=[layout,raw];
+  await React.act(async()=>{click(byText(".lit-status .chip","在读"));});await flush();
+  await run(".lit-translate");await select(b.id);
+  await React.act(async()=>{finish({...translated,status:"failed",error:"翻译校验失败，可继续重试"});});await flush();
+  ok("B阅读不被A的翻译失败打断",text(q(".lit-reader-title"))===b.title && q(".lit-progress")?.dataset.taskPaperId===a.id && text(q(".lit-progress.is-failed")).includes("翻译校验失败"));
+  await run(".lit-task-return");
+  ok("返回失败任务显示原文献详情",text(q(".lit-reader-title"))===a.title && text(q(".lit-translation-action .warn")).includes("翻译校验失败"));
+  await run(".lit-extract-fast");await select(b.id);
+  const before=calls.length;
+  await React.act(async()=>{finish({...raw,status:"failed",error:"提取失败"});});await flush();
+  ok("提取失败仍归属A且不进入排版",q(".lit-progress.is-failed")?.dataset.taskPaperId===a.id && text(q(".lit-task-title")).includes(a.title) && calls.length===before && text(q(".lit-reader-title"))===b.title);
+  await React.act(async()=>{root.unmount();});
+  report();
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

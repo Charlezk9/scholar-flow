@@ -3572,3 +3572,9 @@ textarea.field {
 
 .lit-create-card .lit-kind { display: flex; flex-wrap: wrap; gap: 6px; }
 .lit-create-card .lit-hint { margin: 0 0 6px; }
+
+/* Running task feedback remains attached to its source paper while browsing. */
+.lit-task-title { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lit-task-status { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lit-task-status > span { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+.lit-task-return { flex: 0 0 auto; }
