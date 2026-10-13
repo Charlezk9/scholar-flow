@@ -534,6 +534,22 @@ impl Db {
         .map_err(|e| e.to_string())
     }
 
+    /// New-entry import: never modify an existing entry; compensate failed imports.
+    pub fn create_paper_with_file(&self, input: PaperInput, src_path: String) -> Result<(Paper, PaperFile), String> {
+        if input.id.is_some() { return Err("新建文献不能指定已有条目".into()); }
+        if !Path::new(&src_path).is_file() { return Err("请选择有效附件".into()); }
+        let paper = self.save_paper(input)?;
+        match self.import_paper_file(PaperFileInput { paper_id: paper.id.clone(), src_path, role: None }) {
+            Ok(file) => Ok((paper, file)),
+            Err(error) => {
+                self.delete_paper(&paper.id).map_err(|cleanup| format!("{error}；清理新条目失败：{cleanup}"))?;
+                let dir = self.dir.join("files").join("papers").join(&paper.id);
+                if dir.exists() { std::fs::remove_dir_all(dir).map_err(|cleanup| format!("{error}；清理附件失败：{cleanup}"))?; }
+                Err(error)
+            }
+        }
+    }
+
     pub fn delete_paper(&self, id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM papers WHERE id=?1", params![id])
@@ -1438,6 +1454,23 @@ mod tests {
         std::fs::remove_file(dir.join(&first.rel_path)).unwrap();
         assert!(db.read_paper_file(&first.id).is_err());
         assert!(db.list_paper_files().unwrap()[0].missing);
+    }
+
+    #[test]
+    fn new_entry_requires_attachment_and_rolls_back_failed_import() {
+        let (db, dir) = tmp_db();
+        assert!(db.create_paper_with_file(paper_input("missing"), dir.join("missing.pdf").to_string_lossy().into()).is_err());
+        assert!(db.list_papers().unwrap().is_empty());
+        let source = dir.join("large.pdf");
+        std::fs::File::create(&source).unwrap().set_len(301 * 1024 * 1024).unwrap();
+        assert!(db.create_paper_with_file(paper_input("large"), source.to_string_lossy().into()).is_err());
+        assert!(db.list_papers().unwrap().is_empty());
+        std::fs::write(&source, b"%PDF-test").unwrap();
+        let (paper, file) = db.create_paper_with_file(paper_input("success"), source.to_string_lossy().into()).unwrap();
+        assert_eq!(file.paper_id, paper.id);
+        assert_eq!(db.read_paper_file(&file.id).unwrap(), b"%PDF-test");
+        assert!(db.create_paper_with_file(paper_input("success"), source.to_string_lossy().into()).is_err());
+        assert_eq!(db.list_papers().unwrap().len(), 1);
     }
 
     #[test]

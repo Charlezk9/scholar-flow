@@ -1,6 +1,6 @@
 [package]
 name = "runningdo"
-version = "1.4.2"
+version = "1.5.0"
 description = "一张纸上的倒计时与日程"
 authors = ["charlezk9"]
 edition = "2021"

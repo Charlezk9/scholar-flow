@@ -262,12 +262,27 @@ def main() -> int:
     return 0
 
 
+def failure_message(exc):
+    """Preserve only local controlled failures; never reveal API response text."""
+    from translate_markdown import TranslationFailure
+    from layout_markdown import LayoutFailure
+    if isinstance(exc, LayoutFailure):
+        from diagnostics import event
+        attrs = {"rule": exc.rule, "batchIds": exc.batch_ids}
+        if exc.block_id is not None: attrs["blockId"] = exc.block_id
+        event("LAYOUT_VALIDATION_FAILED", "layout", **attrs)
+        return str(exc)
+    if isinstance(exc, TranslationFailure):
+        return str(exc)
+    status = getattr(exc, "status_code", None)
+    return f"{type(exc).__name__}（HTTP {status}）" if type(status) is int else type(exc).__name__
+
+
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
         # API 异常对象可能含请求信息，不将响应或密钥写入日志／前端。
-        from translate_markdown import TranslationFailure
-        message = str(exc) if isinstance(exc, TranslationFailure) else f"{type(exc).__name__}（HTTP {getattr(exc, 'status_code', 'n/a')}）"
+        message = failure_message(exc)
         print(f"提取失败：{message}", file=sys.stderr)
         raise SystemExit(1)

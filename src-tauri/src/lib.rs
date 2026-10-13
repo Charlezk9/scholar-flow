@@ -118,6 +118,8 @@ pub fn run() {
             commands::list_paper_files,
             commands::import_paper_file,
             commands::choose_paper_file,
+            commands::choose_new_paper_source,
+            commands::create_paper_with_file,
             commands::delete_paper_file,
             commands::read_paper_file,
             commands::list_paper_extracts,

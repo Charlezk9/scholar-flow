@@ -69,8 +69,12 @@ export default function LiteraturePage() {
   const [newFolder, setNewFolder] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newKind, setNewKind] = useState<PaperKind>("paper");
-  const [newYear, setNewYear] = useState("");
-  const [newVenue, setNewVenue] = useState("");
+  const [newSource, setNewSource] = useState("");
+  const [newDestination, setNewDestination] = useState("none");
+  const [createError, setCreateError] = useState("");
+  const [choosingSource, setChoosingSource] = useState(false);
+  const choosingSourceRef = useRef(false);
+  const createCard = useRef<HTMLElement>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [paperTags, setPaperTags] = useState<Tag[]>([]);
   const [tagName, setTagName] = useState("");
@@ -137,17 +141,34 @@ export default function LiteraturePage() {
     void reload().catch(() => notify("文献加载失败，请重新进入文献页"));
   }, []);
 
+  const browseSnapshot = useRef({loaded,folder,selectedId,collapsed});
+  browseSnapshot.current = {loaded,folder,selectedId,collapsed};
+  const browseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistBrowse = () => {
-    if (!loaded) return;
-    try {localStorage.setItem(BROWSE_KEY,JSON.stringify({folder,selectedId,collapsed:[...collapsed],scroll:scrollPosition.current}));}catch{/* 存储不可用时仍可浏览。 */}
+    const state = browseSnapshot.current;
+    if (!state.loaded) return;
+    try {localStorage.setItem(BROWSE_KEY,JSON.stringify({folder:state.folder,selectedId:state.selectedId,collapsed:[...state.collapsed],scroll:scrollPosition.current}));}catch{/* 存储不可用时仍可浏览。 */}
   };
-  useEffect(persistBrowse,[loaded,folder,selectedId,collapsed]);
+  const scheduleBrowse = () => {
+    if (browseTimer.current) clearTimeout(browseTimer.current);
+    browseTimer.current = setTimeout(persistBrowse, 200);
+  };
+  useEffect(scheduleBrowse,[loaded,folder,selectedId,collapsed]);
+  useEffect(() => () => {if (browseTimer.current) clearTimeout(browseTimer.current);persistBrowse();}, []);
   useEffect(()=>{if(loaded && treeContent.current) treeContent.current.scrollTop=remembered.scroll;},[loaded]);
   useEffect(()=>()=>{if(locateTimer.current) clearTimeout(locateTimer.current);if(locateFrame.current !== null) window.cancelAnimationFrame(locateFrame.current);if(hoverTimer.current) clearTimeout(hoverTimer.current);},[]);
   const visibleNodes = useMemo(
     () => [...nodes].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
     [nodes],
   );
+
+  const treeIndex = useMemo(() => {
+    const children = new Map<string | null, LibraryNode[]>();
+    const entries = new Map<string, Paper[]>();
+    for (const node of visibleNodes) {const list=children.get(node.parentId) ?? [];list.push(node);children.set(node.parentId,list);}
+    for (const item of papers) {const id=item.nodeId ?? "none";const list=entries.get(id) ?? [];list.push(item);entries.set(id,list);}
+    return {children,entries};
+  }, [visibleNodes,papers]);
 
   const paper = papers.find((p) => p.id === selectedId) ?? null;
   const folderCounts = useMemo(() => {
@@ -173,13 +194,13 @@ export default function LiteraturePage() {
   const paperFiles = files.filter((f) => f.paperId === paper?.id);
   const paperExtracts = extracts.filter((e) => e.paperId === paper?.id);
 
-  const guarded = async (action: () => Promise<unknown>, done?: string) => {
+  const guarded = async (action: () => Promise<unknown>, done?: string, refresh = true) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     try {
       await action();
-      await reload();
+      if (refresh) await reload();
       if (done) notify(done);
     } catch (e) {
       reportError(e,"literature",undefined,{paperId:paper?.id});
@@ -196,11 +217,12 @@ export default function LiteraturePage() {
         parentId: folder === "all" || folder === "none" ? null : folder,
         name: newFolder,
       });
+      setNodes(previous => [...previous, node]);
       setNewFolder("");
       setCreatingFolder(false);
       setFolder(node.id);
       setCollapsed(previous => {const next = new Set(previous); next.delete(folder); return next;});
-    }, "文件夹已创建");
+    }, "文件夹已创建", false);
 
   const deleteFolder = (target = folder) => {
     if (target === "all" || target === "none") return;
@@ -213,29 +235,43 @@ export default function LiteraturePage() {
       onConfirm: async () => {
         await guarded(async () => {
           await lit.deleteNode(target);
+          const [nextNodes,nextPapers] = await Promise.all([lit.listNodes(),lit.listPapers()]);
+          setNodes(nextNodes);setPapers(nextPapers);
           setFolder("all");
-        }, "文件夹已删除");
+        }, "文件夹已删除", false);
       },
     });
   };
 
-  const createPaper = () => {
-    if (!newTitle.trim()) { notify("请先填写文献标题"); titleInput.current?.focus(); return; }
-    return guarded(async () => {
-      const year = newYear.trim() ? Number(newYear.trim()) : null;
-      const created = await lit.savePaper({
-        nodeId: folder === "all" || folder === "none" ? null : folder,
-        kind: newKind,
-        title: newTitle,
-        year,
-        venue: newVenue.trim() || null,
-      });
-      setNewTitle("");
-      setNewYear("");
-      setNewVenue("");
-      setSelectedId(created.id); setCreating(false);
-      setCollapsed(previous => {const next = new Set(previous); next.delete(created.nodeId ?? "none"); return next;});
-    }, "文献已添加");
+  const openCreate = (destination = folder) => {
+    setNewDestination(destination === "all" ? "none" : destination);
+    setNewTitle("");setNewSource("");setCreateError("");setCreating(true);setCreatingFolder(false);
+  };
+  const chooseNewSource = async () => {
+    if (choosingSourceRef.current || busyRef.current) return;
+    choosingSourceRef.current=true;setChoosingSource(true);setCreateError("");
+    try {
+      const path = await lit.chooseNewSource();
+      if (path) {
+        const titleOf = (value: string) => (value.split(/[\\/]/).pop() ?? "").replace(/\.[^.]+$/, "");
+        setNewTitle(previous => !previous.trim() || previous === titleOf(newSource) ? titleOf(path) : previous);
+        setNewSource(path);
+      }
+    } catch(error) {setCreateError(error instanceof Error ? error.message : String(error));}
+    finally {choosingSourceRef.current=false;setChoosingSource(false);}
+  };
+  const closeCreate = () => {if (!busyRef.current && !choosingSourceRef.current) setCreating(false);};
+  const createPaper = async () => {
+    if (busyRef.current || choosingSourceRef.current) return;
+    if (!newSource || !newTitle.trim()) {setCreateError("请选择附件并填写文献标题");return;}
+    busyRef.current=true;setBusy(true);setCreateError("");
+    try {
+      const [created,file] = await lit.createWithFile({nodeId:newDestination === "none" ? null : newDestination,kind:newKind,title:newTitle},newSource);
+      setPapers(previous=>[...previous,created]);setFiles(previous=>[...previous,file]);
+      setSelectedId(created.id);setFolder(newDestination);expandDestination(newDestination);setCreating(false);
+      notify("文献及附件已添加");
+    } catch(error) {setCreateError(error instanceof Error ? error.message : String(error));}
+    finally {busyRef.current=false;setBusy(false);}
   };
 
   const savePaperField = (patch: Partial<Paper>) => {
@@ -444,7 +480,23 @@ export default function LiteraturePage() {
     }).catch(() => { if (!cancelled) {setMdError("Markdown 读取失败，请在文献详情检查或重新生成。");notify("MD 读取失败，请在文献详情检查提取稿");} });
     return () => { cancelled = true; };
   }, [paper?.id, latest?.id]);
-  useEffect(() => { if (creating) titleInput.current?.focus(); }, [creating]);
+  useEffect(() => {
+    if (!creating) return;
+    const previous = document.activeElement as HTMLElement | null;
+    titleInput.current?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {event.preventDefault();closeCreate();}
+      if (event.key === "Tab") {
+        const controls = [...(createCard.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') ?? [])];
+        if (!controls.length) {event.preventDefault();return;}
+        const first=controls[0],last=controls[controls.length-1];
+        if (event.shiftKey && document.activeElement===first) {event.preventDefault();last?.focus();}
+        else if (!event.shiftKey && document.activeElement===last) {event.preventDefault();first?.focus();}
+      }
+    };
+    document.addEventListener("keydown",key);
+    return () => {document.removeEventListener("keydown",key);previous?.focus();};
+  }, [creating]);
 
 
   const toggleDetails = () => {
@@ -505,10 +557,10 @@ export default function LiteraturePage() {
   const relocate = (paperId: string, id: string, kind?: "folder") => {
     if(kind === "folder") {
       const node=nodes.find(n=>n.id === paperId);if(!node || invalidDestination(id)) return;
-      void guarded(async()=>{await lit.saveNode({...node,parentId:id === "none" ? null : id});setMoveCard(null);expandDestination(id);},"文件夹已移动");return;
+      void guarded(async()=>{const updated=await lit.saveNode({...node,parentId:id === "none" ? null : id});setNodes(previous=>previous.map(n=>n.id===updated.id ? updated : n));setMoveCard(null);expandDestination(id);},"文件夹已移动",false);return;
     }
     const moved = papers.find(p=>p.id === paperId);if (!moved) return;
-    void guarded(async()=>{await lit.savePaper({...moved,nodeId:id === "none" ? null : id});setMoveCard(null);expandDestination(id);},"文献已移动");
+    void guarded(async()=>{const updated=await lit.savePaper({...moved,nodeId:id === "none" ? null : id});setPapers(previous=>previous.map(p=>p.id===updated.id ? updated : p));setMoveCard(null);expandDestination(id);},"文献已移动",false);
   };
   const movePaper = (event: React.DragEvent, id: string) => {
     event.preventDefault();event.stopPropagation();setDropTarget(null);
@@ -529,21 +581,25 @@ export default function LiteraturePage() {
     if(action === "rename"){setRename({id,kind:kind === "paper" ? "paper" : "folder",value:kind === "paper" ? item?.title ?? "" : node?.name ?? ""});return;}
     if(action === "move"){setMoveCollapsed(new Set());setMoveCard({paperId:id,target:kind === "paper" ? item?.nodeId ?? "none" : node?.parentId ?? "none",kind:kind === "paper" ? undefined : "folder"});return;}
     if(action === "delete"){if(kind === "paper") {if(item) deletePaper(item);}else deleteFolder(id);return;}
-    setFolder(id);setCreating(action === "paper");setCreatingFolder(action === "folder");
+    setFolder(id);if(action === "paper") openCreate(id);else {setCreating(false);setCreatingFolder(action === "folder");}
   };
   const saveRename = () => {
     if(!rename?.value.trim()) return;
-    void guarded(async()=>{if(rename.kind === "paper"){const item=papers.find(p=>p.id===rename.id);if(item) await lit.savePaper({...item,title:rename.value.trim()});}else{const node=nodes.find(n=>n.id===rename.id);if(node) await lit.saveNode({...node,name:rename.value.trim()});}setRename(null);},"名称已更新");
+    void guarded(async()=>{
+      if(rename.kind === "paper") {const item=papers.find(p=>p.id===rename.id);if(item) {const updated=await lit.savePaper({...item,title:rename.value.trim()});setPapers(previous=>previous.map(p=>p.id===updated.id ? updated : p));}}
+      else {const node=nodes.find(n=>n.id===rename.id);if(node) {const updated=await lit.saveNode({...node,name:rename.value.trim()});setNodes(previous=>previous.map(n=>n.id===updated.id ? updated : n));}}
+      setRename(null);
+    },"名称已更新",false);
   };
-  const destinationTree = (parent:string|null,depth=0): React.ReactNode => visibleNodes.filter(n=>n.parentId===parent).map(node=><div key={node.id}><div className="lit-destination-row" style={{paddingLeft:depth*14}}><button className="lit-folder-chevron" aria-label={`${moveCollapsed.has(node.id) ? "展开" : "折叠"}${node.name}`} onClick={()=>setMoveCollapsed(previous=>{const next=new Set(previous);if(next.has(node.id)) next.delete(node.id);else next.add(node.id);return next;})}>{moveCollapsed.has(node.id) ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}</button><button className={`lit-node ${moveCard?.target===node.id ? "is-on" : ""}`} disabled={invalidDestination(node.id)} title={directoryPath(node.id)} onClick={()=>moveCard && setMoveCard({...moveCard,target:node.id})}><Folder size={14}/>{node.name}</button></div>{!moveCollapsed.has(node.id) && destinationTree(node.id,depth+1)}</div>);
+  const destinationTree = (parent:string|null,depth=0): React.ReactNode => (treeIndex.children.get(parent) ?? []).map(node=><div key={node.id}><div className="lit-destination-row" style={{paddingLeft:depth*14}}><button className="lit-folder-chevron" aria-label={`${moveCollapsed.has(node.id) ? "展开" : "折叠"}${node.name}`} onClick={()=>setMoveCollapsed(previous=>{const next=new Set(previous);if(next.has(node.id)) next.delete(node.id);else next.add(node.id);return next;})}>{moveCollapsed.has(node.id) ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}</button><button className={`lit-node ${moveCard?.target===node.id ? "is-on" : ""}`} disabled={invalidDestination(node.id)} title={directoryPath(node.id)} onClick={()=>moveCard && setMoveCard({...moveCard,target:node.id})}><Folder size={14}/>{node.name}</button></div>{!moveCollapsed.has(node.id) && destinationTree(node.id,depth+1)}</div>);
   const renderFolder = (id: string, name: string, depth: number) => {
-    const children = visibleNodes.filter(node => node.parentId === (id === "none" ? null : id));
-    const entries = papers.filter(p => id === "none" ? !p.nodeId : p.nodeId === id);
+    const children = id === "none" ? [] : treeIndex.children.get(id) ?? [];
+    const entries = treeIndex.entries.get(id) ?? [];
     const closed = collapsed.has(id);
     return <div key={id} className="lit-branch">
       <div className={`lit-folder-row ${dropTarget === id ? "is-drop-target" : ""}`} onDragOver={e=>dragOver(e,id)} onDragLeave={e=>{if(!(e.relatedTarget instanceof window.Node) || !e.currentTarget.contains(e.relatedTarget)){setDropTarget(null);if(hoverTimer.current) clearTimeout(hoverTimer.current);}}} onDrop={e=>movePaper(e,id)} style={{paddingLeft:6+depth*14}}>
-        <button className="lit-folder-chevron" aria-label={`${closed ? "展开" : "折叠"}${name}`} aria-expanded={!closed} onClick={()=>toggleFolder(id)}>{closed ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}</button>
-        <button className={`lit-node ${folder === id ? "is-on" : ""}`} title={name} onClick={()=>setFolder(id)} onContextMenu={e=>{if(id === "none") return;e.preventDefault();setContext({id,x:e.clientX,y:e.clientY});}}><Folder size={14}/><span className="lit-node-name">{name}（{id === "none" ? entries.length : folderCounts.get(id) ?? 0}）</span></button>
+        <button className="lit-folder-chevron" aria-label={`${closed ? "展开" : "折叠"}${name}`} aria-expanded={!closed} disabled={!children.length && !entries.length} onClick={()=>toggleFolder(id)}>{closed ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}</button>
+        <button className={`lit-node ${folder === id ? "is-on" : ""}`} title={name} onClick={()=>setFolder(id)} onContextMenu={e=>{if(id === "none") return;e.preventDefault();setContext({id,x:e.clientX,y:e.clientY});}}><Folder size={14}/><span className="lit-node-name">{name}</span><span className="lit-node-count">（{id === "none" ? entries.length : folderCounts.get(id) ?? 0}）</span></button>
       </div>
       {!closed && <div className="lit-items">
         {id !== "none" && children.map(node => renderFolder(node.id, node.name, depth + 1))}
@@ -558,54 +614,36 @@ export default function LiteraturePage() {
         <div className="lit-tree-head">
           <FolderTree size={15}/><span>资料库</span>
           <div className="lit-tree-actions">
-            <button className="lit-tree-action lit-new-paper" title="新建文献项目" aria-label="新建文献项目" aria-expanded={creating} onClick={() => {setCreating(!creating);setCreatingFolder(false);}}><FilePlus2 size={15}/></button>
+            <button className="lit-tree-action lit-new-paper" title="新建文献项目" aria-label="新建文献项目" aria-expanded={creating} onClick={() => openCreate()}><FilePlus2 size={15}/></button>
             <button className="lit-tree-action lit-new-folder" title="新建文件夹" aria-label="新建文件夹" aria-expanded={creatingFolder} onClick={() => {setCreatingFolder(!creatingFolder);setCreating(false);}}><FolderPlus size={15}/></button>
             <button className="lit-tree-action lit-reveal-current" title="定位当前文献" aria-label="定位当前文献" disabled={!paper} onClick={()=>reveal()}><LocateFixed size={15}/></button>
             <button className="lit-tree-action" title="删除选中文件夹" aria-label="删除选中文件夹" disabled={busy || folder === "all" || folder === "none"} onClick={()=>deleteFolder()}><Trash2 size={14}/></button>
           </div>
         </div>
         {creatingFolder && <div className="lit-tree-foot"><input autoFocus className="field lit-newfolder-input" placeholder="新建文件夹…" value={newFolder} onChange={e=>setNewFolder(e.target.value)} onKeyDown={e=>{if(e.key === "Enter") void createFolder();if(e.key === "Escape") setCreatingFolder(false);}}/><button className="btn btn-outline btn-sm" onClick={createFolder} disabled={busy}>新建</button></div>}
-        {creating && (
-        <div className="lit-form">
-          <input
-            ref={titleInput}
-            aria-label="文献标题（必填）"
-            className="field lit-new-title"
-            placeholder="文献标题（必填）"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-          />
-          <div className="lit-form-row">
-<div className="lit-kind" role="group" aria-label="文献类别">{PAPER_KINDS.map(k => <button key={k.key} className={`chip ${newKind === k.key ? "is-on" : ""}`} onClick={() => setNewKind(k.key)}>{k.label}</button>)}</div>
-            <input
-              className="field lit-new-year"
-              placeholder="年份"
-              value={newYear}
-              onChange={(e) => setNewYear(e.target.value)}
-            />
-            <input
-              className="field lit-new-venue"
-              placeholder="期刊 / 会议"
-              value={newVenue}
-              onChange={(e) => setNewVenue(e.target.value)}
-            />
-          </div>
-          <p className="lit-hint">先填写标题创建项目，再在右侧详情导入附件。</p>
-          <button className="btn btn-sm" onClick={createPaper} disabled={busy}>
-            添加文献
-          </button>
-        </div>        )}
-
-
-        <div className="lit-tree-content" ref={treeContent} onScroll={e=>{scrollPosition.current=e.currentTarget.scrollTop;persistBrowse();}}>
+        <div className="lit-tree-content" ref={treeContent} onScroll={e=>{scrollPosition.current=e.currentTarget.scrollTop;scheduleBrowse();}}>
           <button className={`lit-node ${folder === "all" ? "is-on" : ""}`} onClick={() => {setFolder("all");setCollapsed(new Set());}}><FolderTree size={14}/><span className="lit-node-name">全部文献（{papers.length}）</span></button>
           {renderFolder("none", "未分类", 0)}
-          {visibleNodes.filter(node=>!node.parentId).map(node=>renderFolder(node.id,node.name,0))}
+          {(treeIndex.children.get(null) ?? []).map(node=>renderFolder(node.id,node.name,0))}
           {papers.length === 0 && <p className="lit-empty">这里还没有文献，点击顶部「新建文献项目」开始。</p>}
         </div>
         <p className="lit-tree-help">拖动文献归档 · 右键新建子文件夹</p>
       </aside>
 
+      {creating && createPortal(<div className="lit-move-backdrop" onClick={closeCreate}>
+        <section ref={createCard} className="lit-move-card lit-create-card" role="dialog" aria-modal="true" aria-label="新建文献" aria-busy={busy || choosingSource} onClick={e=>e.stopPropagation()}>
+          <h3>新建文献</h3>
+          <label>文献标题<input ref={titleInput} className="field lit-new-title" value={newTitle} maxLength={200} disabled={busy} placeholder="选择附件后自动填写，可修改" onChange={e=>setNewTitle(e.target.value)}/></label>
+          <div className="lit-kind" role="group" aria-label="文献类别">{PAPER_KINDS.map(k=><button key={k.key} disabled={busy} className={`chip ${newKind===k.key ? "is-on" : ""}`} onClick={()=>setNewKind(k.key)}>{k.label}</button>)}</div>
+          <div className="lit-create-source"><span>附件（必选）</span><button className="btn btn-outline btn-sm lit-create-choose" disabled={busy || choosingSource} onClick={()=>void chooseNewSource()}>{choosingSource ? "选择中…" : newSource ? "更换附件…" : "选择附件…"}</button><span className="lit-source-name" title={newSource.split(/[\\/]/).pop()}>{newSource.split(/[\\/]/).pop() || "尚未选择附件"}</span></div>
+          <div><p className="lit-hint">存储文件夹</p><div className="lit-create-destinations" role="group" aria-label="存储文件夹">
+            <button className={`lit-node ${newDestination==="none" ? "is-on" : ""}`} disabled={busy} aria-pressed={newDestination==="none"} onClick={()=>setNewDestination("none")}><Folder size={14}/>未分类</button>
+            {visibleNodes.map(node=><button key={node.id} className={`lit-node ${newDestination===node.id ? "is-on" : ""}`} disabled={busy} aria-pressed={newDestination===node.id} title={directoryPath(node.id)} onClick={()=>setNewDestination(node.id)}><Folder size={14}/>{directoryPath(node.id)}</button>)}
+          </div></div>
+          {createError && <p className="lit-create-error" role="alert">{createError}</p>}
+          <div className="lit-inline"><button className="btn btn-outline btn-sm" disabled={busy || choosingSource} onClick={closeCreate}>取消</button><button className="btn btn-sm lit-create-submit" disabled={busy || choosingSource || !newSource || !newTitle.trim()} onClick={()=>void createPaper()}>{busy ? "正在导入…" : "添加文献"}</button></div>
+        </section>
+      </div>,document.body)}
       {context && createPortal(<div className="lit-context-menu" role="menu" onPointerDown={e=>e.stopPropagation()} style={{position:"fixed",left:Math.max(8,Math.min(context.x,window.innerWidth-200)),top:Math.max(8,Math.min(context.y,window.innerHeight-220))}}>{(context.kind === "paper" ? [["read","阅读"],["rename","重命名"],["move","移动到目录"],["delete","删除文献"]] : [["folder","新建子文件夹"],["paper","新建文献"],["rename","重命名"],["move","移动文件夹"],["delete","删除文件夹"]]).map(([action,label])=><button role="menuitem" key={action} disabled={busy} onClick={()=>menuAction(action)}>{label}</button>)}</div>,document.body)}
       {moveCard && createPortal(<div className="lit-move-backdrop" onClick={()=>setMoveCard(null)}><section className="lit-move-card" role="dialog" aria-modal="true" aria-label="移动到目录" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key === "Escape") setMoveCard(null);}}><h3>移动到目录</h3><div className="lit-move-targets"><button className={`lit-node ${moveCard.target==="none" ? "is-on" : ""}`} onClick={()=>setMoveCard({...moveCard,target:"none"})}><Folder size={14}/>{moveCard.kind === "folder" ? "资料库根目录" : "未分类"}</button>{destinationTree(null)}</div><div className="lit-inline"><button className="btn btn-outline btn-sm" onClick={()=>setMoveCard(null)}>取消</button><button className="btn btn-sm lit-move-confirm" disabled={busy || invalidDestination(moveCard.target)} onClick={()=>relocate(moveCard.paperId,moveCard.target,moveCard.kind)}>移动</button></div></section></div>,document.body)}
       {rename && createPortal(<div className="lit-move-backdrop" onClick={()=>setRename(null)}><section className="lit-move-card" role="dialog" aria-modal="true" aria-label="重命名" onClick={e=>e.stopPropagation()}><h3>重命名</h3><input autoFocus className="field lit-rename-input" aria-label="新名称" value={rename.value} onChange={e=>setRename({...rename,value:e.target.value})} onKeyDown={e=>{if(e.key === "Enter" && !e.nativeEvent.isComposing) saveRename();if(e.key === "Escape") setRename(null);}}/><div className="lit-inline"><button className="btn btn-outline btn-sm" onClick={()=>setRename(null)}>取消</button><button className="btn btn-sm lit-rename-save" disabled={busy || !rename.value.trim()} onClick={saveRename}>保存</button></div></section></div>,document.body)}

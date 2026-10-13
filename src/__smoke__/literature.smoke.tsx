@@ -56,10 +56,27 @@ async function main() {
   ok("空态提示出现", text(q(".lit-empty")).includes("还没有文献"));
   ok("未选文献时阅读区给提示", text(q(".lit-editor .lit-empty")).includes("从左侧选择"));
   await React.act(async () => { click(q(".lit-new-paper")); });
-  ok("新建表单位于左侧资料库", !!q(".lit-tree .lit-form"));
-  await React.act(async () => { click(byText(".btn", "添加文献")); });
-  ok("空标题有明确提示", (st().toast ?? "").includes("请先填写文献标题"));
+  ok("新建弹卡 Portal 到 body", q(".lit-create-card")?.parentElement?.parentElement === document.body && !q(".lit-tree .lit-form"));
+  ok("附件必选且不含年份来源输入", (q(".lit-create-submit") as HTMLButtonElement).disabled && !q(".lit-new-year") && !q(".lit-new-venue"));
+  const originalNewSource = lit.chooseNewSource;
+  lit.chooseNewSource = async () => null;
+  await React.act(async()=>{click(q('.lit-create-choose'));});await flush();
+  ok('取消选文件不创建条目',(await lit.listPapers()).length===0 && (q('.lit-create-submit') as HTMLButtonElement).disabled);
+  lit.chooseNewSource = async () => '/tmp/Attachment title.pdf';
+  await React.act(async()=>{click(q('.lit-create-choose'));});await flush();
+  ok('附件文件名自动填写标题',(q('.lit-new-title') as HTMLInputElement).value==='Attachment title');
+  await React.act(async()=>{typeInto(q('.lit-new-title'),'手动标题');});
+  lit.chooseNewSource = async () => '/tmp/Other attachment.pdf';
+  await React.act(async()=>{click(q('.lit-create-choose'));});await flush();
+  ok('更换附件保留手动标题',(q('.lit-new-title') as HTMLInputElement).value==='手动标题');
+  await React.act(async()=>{pressKey(q('.lit-new-title'),'Escape');});
+  ok('取消弹卡不创建条目',!q('.lit-create-card') && (await lit.listPapers()).length===0);
 
+  const beforeScroll = localStorage.getItem('runningdo.literature.browse.v1');
+  await React.act(async()=>{const tree=q('.lit-tree-content')!;tree.scrollTop=37;tree.dispatchEvent(new Event('scroll',{bubbles:true}));});
+  ok('滚动事件不立即同步写存储',localStorage.getItem('runningdo.literature.browse.v1')===beforeScroll);
+  await React.act(async()=>{await sleep(250);});
+  ok('滚动停止后保存最新位置',JSON.parse(localStorage.getItem('runningdo.literature.browse.v1') ?? '{}').scroll===37);
   section("文件夹树");
   await React.act(async () => {click(q(".lit-new-folder"));});
   await React.act(async () => {
@@ -72,10 +89,19 @@ async function main() {
 
   section("文献录入");
   await React.act(async () => {click(q(".lit-new-paper"));});
+  await React.act(async()=>{click(q('.lit-create-choose'));});await flush();
+  ok('默认存储文件夹为当前目录',text(q('.lit-create-destinations .is-on')).includes('多模态'));
+  await React.act(async()=>{click(byText('.lit-create-destinations .lit-node','未分类'));});
+  ok('可选择不同存储文件夹',text(q('.lit-create-destinations .is-on')).includes('未分类'));
+  await React.act(async()=>{click(byText('.lit-create-destinations .lit-node','多模态'));});
+  const originalCreateWithFile = lit.createWithFile;
+  lit.createWithFile = async()=>{throw new Error('模拟附件导入失败');};
+  await React.act(async()=>{click(q('.lit-create-submit'));});await flush();
+  ok('导入失败保留弹卡并显示错误',!!q('.lit-create-card') && text(q('[role="alert"]')).includes('导入失败') && (await lit.listPapers()).length===0);
+  lit.createWithFile = originalCreateWithFile;
   await React.act(async () => {
     typeInto(q(".lit-new-title"), "Attention Is All You Need");
-    typeInto(q(".lit-new-year"), "2017");
-    typeInto(q(".lit-new-venue"), "NeurIPS");
+
   });
   await React.act(async () => {
     click(byText(".btn", "添加文献"));
@@ -87,7 +113,11 @@ async function main() {
   ok("创建后详情仍默认隐藏", !q(".lit-detail"));
   await React.act(async () => { click(q(".lit-details-toggle")); });
   ok("点击右侧入口展开详情", !!q(".lit-detail"));
-  ok("详情显示标题与期刊", text(q(".lit-reader-title")) === "Attention Is All You Need" && (q(".lit-edit-venue") as HTMLInputElement).value === "NeurIPS");
+  ok("新建同时导入附件", (await lit.listFiles()).length===1);
+  ok("详情仍保留期刊编辑", text(q(".lit-reader-title")) === "Attention Is All You Need" && (q(".lit-edit-venue") as HTMLInputElement).value === "");
+  // Existing empty-source fixture remains necessary for legacy-entry import coverage.
+  await lit.deleteFile((await lit.listFiles())[0].id);
+  await React.act(async()=>{click(byText('.lit-status .chip','未读'));});await flush();
   ok("文献使用紧凑标题行，元信息不挤占树", !!item?.querySelector(".t") && !item?.querySelector(".m"));
   const folderRow = byText(".lit-node", "多模态（1）");
   await React.act(async () => {click(folderRow!.parentElement!.querySelector(".lit-folder-chevron"));});
@@ -111,6 +141,10 @@ async function main() {
 
   section("文献右键目录选择卡");
   const openMove = async()=>{await React.act(async()=>{q('.lit-item')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true}));});await React.act(async()=>{click(byText('[role="menuitem"]','移动到目录'));});};
+  const originalFiles = lit.listFiles, originalExtractsForMove = lit.listExtracts;
+  let assetReloads = 0;
+  lit.listFiles = async()=>{assetReloads++;return originalFiles();};
+  lit.listExtracts = async(id)=>{assetReloads++;return originalExtractsForMove(id);};
   await openMove();
   ok('目录卡 Portal 到 body',q('.lit-move-backdrop')?.parentElement===document.body && !!q('[role="dialog"]'));
   await React.act(async()=>{click(byText('.lit-move-targets .lit-node','未分类'));});
@@ -121,6 +155,8 @@ async function main() {
   await React.act(async()=>{click(q('.lit-move-confirm'));});await flush();
   ok('可移动回其他目录',(await lit.listPapers())[0].nodeId!==null);
 
+  ok('移动目录不全量重载附件和提取记录',assetReloads===0);
+  lit.listFiles=originalFiles;lit.listExtracts=originalExtractsForMove;
   section("选择折叠分离、定位与完整菜单");
   const activeFolder=byText('.lit-node','多模态（1）')!;
   await React.act(async()=>{click(activeFolder);});
@@ -165,6 +201,7 @@ async function main() {
 
   section("标题唯一 + 轻松改名（回车保存）");
   await React.act(async () => { click(q(".lit-new-paper")); });
+  await React.act(async()=>{click(q(".lit-create-choose"));});await flush();
   await React.act(async () => {
     typeInto(q(".lit-new-title"), "attention is all you need");
   });
@@ -173,7 +210,8 @@ async function main() {
   });
   await flush();
   ok("重复标题被拒绝", qa(".lit-item").length === 1, `${qa(".lit-item").length} 条`);
-  ok("给出「不能重复」提示", (st().toast ?? "").includes("不能重复"), st().toast ?? "");
+  ok("给出「不能重复」提示", text(q(".lit-create-error")).includes("不能重复"));
+  await React.act(async()=>{pressKey(q(".lit-new-title"),"Escape");});
   await React.act(async () => {
     const input = q(".lit-edit-title") as HTMLInputElement;
     typeInto(input, "Attention（改名后）");
@@ -373,11 +411,13 @@ async function main() {
   lit.listExtracts = async () => [layout,success,...records];
   lit.cloudReady = originalReady;
 
+  await React.act(async()=>{click(byText(".lit-status .chip", "在读"));});await flush();
   section("切换文献后的迟到响应");
   let lateMd!: (value: string) => void;
   lit.readExtract = async () => new Promise(resolve => { lateMd = resolve; });
   const firstId = qa(".lit-item")[0];
   if (!q(".lit-new-title")) await React.act(async () => { click(q(".lit-new-paper")); });
+  await React.act(async()=>{click(q(".lit-create-choose"));});await flush();
   await React.act(async () => { typeInto(q(".lit-new-title"), "另一篇论文"); });
   await React.act(async () => { click(byText(".btn", "添加文献")); }); await flush();
   const secondItem = qa(".lit-item").find(el => text(el).includes("另一篇论文"))!;
@@ -387,6 +427,7 @@ async function main() {
   ok("迟到的 MD 不覆盖当前文献", !text(q(".lit-editor")).includes("不应出现在"));
   ok("无提取稿的新文献 MD 保持禁用", (q(".lit-tab-md") as HTMLButtonElement).disabled);
   lit.extract = originalExtract; lit.listExtracts = originalList; lit.readExtract = originalRead;
+  lit.chooseNewSource = originalNewSource;
 
   section("破坏性操作必须过站内确认");
   const before = qa(".lit-item").length;

@@ -3388,9 +3388,9 @@ textarea.field {
 .lit-figure { color: var(--ink-3); }
 .lit-form-row { flex-wrap: wrap; }
 .lit-file, .lit-extract { flex-wrap: wrap; }
-:is(.lit-page, .lit-detail-overlay) .chip { min-height: calc(28px * var(--font-scale)); padding: 4px 9px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-panel); color: var(--ink-2); font-size: calc(12px * var(--font-scale)); cursor: pointer; }
-:is(.lit-page, .lit-detail-overlay) .chip.is-on { border-color: var(--cinnabar); color: var(--cinnabar); background: var(--paper-note-soft); }
-:is(.lit-page, .lit-detail-overlay) .chip:disabled { opacity: .5; cursor: default; }
+:is(.lit-page, .lit-detail-overlay, .lit-create-card) .chip { min-height: calc(28px * var(--font-scale)); padding: 4px 9px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-panel); color: var(--ink-2); font-size: calc(12px * var(--font-scale)); cursor: pointer; }
+:is(.lit-page, .lit-detail-overlay, .lit-create-card) .chip.is-on { border-color: var(--cinnabar); color: var(--cinnabar); background: var(--paper-note-soft); }
+:is(.lit-page, .lit-detail-overlay, .lit-create-card) .chip:disabled { opacity: .5; cursor: default; }
 
 /* 文献工作台：资料库 + 阅读器 + 可收起的详情侧栏 */
 .lit-tree { min-width: 0; }
@@ -3558,3 +3558,17 @@ textarea.field {
 .diagnostic-mask {z-index:1199;}
 
 .diagnostic-fallback {padding:32px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;font-size:calc(14px * var(--font-scale));}
+
+/* v1.5 · 新建弹卡与目录显示 */
+.lit-create-card { width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.lit-create-card label { display: flex; flex-direction: column; gap: 6px; font-size: calc(13px * var(--font-scale)); }
+.lit-create-card .field { width: 100%; min-width: 0; box-sizing: border-box; }
+.lit-create-source { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: calc(13px * var(--font-scale)); }
+.lit-source-name { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; color: var(--ink-3); }
+.lit-create-destinations { max-height: 24vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-md); }
+.lit-create-error { margin: 0; color: var(--cinnabar); overflow-wrap: anywhere; font-size: calc(13px * var(--font-scale)); }
+.lit-node-count { flex: 0 0 auto; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.lit-folder-chevron:disabled { visibility: hidden; }
+
+.lit-create-card .lit-kind { display: flex; flex-wrap: wrap; gap: 6px; }
+.lit-create-card .lit-hint { margin: 0 0 6px; }

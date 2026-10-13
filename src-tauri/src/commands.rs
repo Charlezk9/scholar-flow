@@ -197,36 +197,46 @@ pub fn duplicate_agenda_item(db: State<'_, std::sync::Arc<Db>>, id: String) -> R
 // ---------- 文献模块（v1.4 · LIT-02 ~ LIT-08） ----------
 
 #[tauri::command]
-pub fn list_library_nodes(
+pub async fn list_library_nodes(
     db: State<'_, std::sync::Arc<Db>>,
 ) -> Result<Vec<crate::models::LibraryNode>, String> {
-    db.list_library_nodes()
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.list_library_nodes())
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn save_library_node(
+pub async fn save_library_node(
     db: State<'_, std::sync::Arc<Db>>,
     input: crate::models::LibraryNodeInput,
 ) -> Result<crate::models::LibraryNode, String> {
-    db.save_library_node(input)
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.save_library_node(input))
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn delete_library_node(db: State<'_, std::sync::Arc<Db>>, id: String) -> Result<(), String> {
-    db.delete_library_node(&id)
+pub async fn delete_library_node(db: State<'_, std::sync::Arc<Db>>, id: String) -> Result<(), String> {
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.delete_library_node(&id))
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn list_papers(db: State<'_, std::sync::Arc<Db>>) -> Result<Vec<crate::models::Paper>, String> {
-    db.list_papers()
+pub async fn list_papers(db: State<'_, std::sync::Arc<Db>>) -> Result<Vec<crate::models::Paper>, String> {
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.list_papers())
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn save_paper(
+pub async fn save_paper(
     db: State<'_, std::sync::Arc<Db>>,
     input: crate::models::PaperInput,
 ) -> Result<crate::models::Paper, String> {
-    db.save_paper(input)
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.save_paper(input))
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -235,10 +245,12 @@ pub fn delete_paper(db: State<'_, std::sync::Arc<Db>>, id: String) -> Result<(),
 }
 
 #[tauri::command]
-pub fn list_paper_files(
+pub async fn list_paper_files(
     db: State<'_, std::sync::Arc<Db>>,
 ) -> Result<Vec<crate::models::PaperFile>, String> {
-    db.list_paper_files()
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.list_paper_files())
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -414,4 +426,26 @@ pub fn read_diagnostics(db: State<'_, std::sync::Arc<Db>>) -> Result<String,Stri
 pub fn open_diagnostics_dir(db: State<'_, std::sync::Arc<Db>>) -> Result<(),String> {
     let path=db.dir.join("logs");std::fs::create_dir_all(&path).map_err(|_|"无法创建日志目录")?;
     std::process::Command::new("open").arg(path).spawn().map_err(|_|"无法打开日志目录")?;Ok(())
+}
+
+/// Choosing a source for a new entry does not create any database records.
+#[tauri::command]
+pub async fn choose_new_paper_source(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog().file().set_title("选择文献附件").blocking_pick_file()
+            .map(|selected| selected.into_path().map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string()))
+            .transpose()
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn create_paper_with_file(
+    db: State<'_, std::sync::Arc<Db>>,
+    input: crate::models::PaperInput,
+    src_path: String,
+) -> Result<(crate::models::Paper, crate::models::PaperFile), String> {
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || db.create_paper_with_file(input, src_path))
+        .await.map_err(|e| e.to_string())?
 }

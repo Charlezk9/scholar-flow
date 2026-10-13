@@ -2,7 +2,7 @@ import {setupDom,ok,report,section,q,text} from './harness';
 setupDom();
 async function main(){
  const React=await import('react');const {createRoot}=await import('react-dom/client');const {default:DiagnosticPanel}=await import('../components/DiagnosticPanel');
- const {recordDiagnostic,showDiagnostics,safeAttributes,installDiagnostics,diagnosticInvoke,getDiagnostics}=await import('../lib/diagnostics');
+ const {recordDiagnostic,showDiagnostics,safeAttributes,installDiagnostics,diagnosticInvoke,getDiagnostics,reportError}=await import('../lib/diagnostics');
  const root=createRoot(document.getElementById('root')!);
  await React.act(async()=>{root.render(React.createElement(DiagnosticPanel));});
  section('本地诊断反馈');
@@ -27,6 +27,9 @@ async function main(){
  fail=false;await React.act(async()=>{await diagnosticInvoke('extract_paper_markdown',{paperId:'test-paper'});});
  ok('重试成功后标记当前错误已解决',getDiagnostics().at(-1)?.resolved===true);
  Reflect.deleteProperty(window,'__TAURI_INTERNALS__');
+ await React.act(async()=>{reportError(new Error('LAYOUT_VALIDATION_FAILED：排版失败（第16页）：无法识别图注编号'),'layout',crypto.randomUUID());});
+ ok('排版错误独立分类而非翻译错误',getDiagnostics().at(-1)?.event==='LAYOUT_VALIDATION_FAILED' && text(q('.diagnostic-notice')).includes('排版校验'));
+
  const {default:DiagnosticBoundary}=await import('../components/DiagnosticBoundary');
  function Broken():never{throw new Error('private rendered body');}
  const previousError=console.error;console.error=()=>{};

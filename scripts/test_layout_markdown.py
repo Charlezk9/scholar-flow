@@ -1,5 +1,9 @@
 import unittest
-from layout_markdown import parse_blocks, validate, render_blocks
+import json
+import io
+from contextlib import redirect_stderr
+from layout_markdown import parse_blocks, validate, render_blocks, parse_response, LayoutFailure
+from extract_markdown import failure_message
 
 class LayoutTests(unittest.TestCase):
     def test_source_pages_and_equations(self):
@@ -35,5 +39,65 @@ class LayoutTests(unittest.TestCase):
         blocks=parse_blocks('## Title $d_k$')
         out=render_blocks(blocks,{0:{'type':'heading','level':3}}, {})
         self.assertIn('### Title $d_k$',out)
+
+    def fixture(self, text="**Fig. B.11.** Appendix image"):
+        blocks = [{"id":209,"page":16,"text":text}]
+        data = {"blocks":[{"id":209,"type":"caption"}],"figures":[{"caption_id":209,"page":16,"bbox":[0.1,0.2,0.9,0.8]}]}
+        return blocks, data
+
+    def test_numbered_and_appendix_captions(self):
+        for caption in ["Fig. 11.", "Figure 2:", "**Fig. B.11.**", "Fig. B.12.", "Figure A-1.", "Fig. S1.", "图 B.11", "图1："]:
+            with self.subTest(caption=caption):
+                blocks,data=self.fixture(caption)
+                labels,figures=parse_response(json.dumps(data),"stop",blocks,18)
+                self.assertEqual(len(figures),1)
+                self.assertEqual(labels[209]["type"],"caption")
+
+    def test_figure_source_checks_remain_strict(self):
+        for field,value in [("caption_id",210),("caption_id",True),("page",17),("page",True)]:
+            with self.subTest(field=field,value=value):
+                blocks,data=self.fixture();data["figures"][0][field]=value
+                with self.assertRaises(LayoutFailure) as raised: parse_response(json.dumps(data),"stop",blocks,18)
+                self.assertEqual(raised.exception.rule,"figure_source")
+        blocks,data=self.fixture();data["blocks"][0]["type"]="body"
+        with self.assertRaises(LayoutFailure): parse_response(json.dumps(data),"stop",blocks,18)
+        blocks,data=self.fixture("Table B.11. Results")
+        with self.assertRaises(LayoutFailure) as raised: parse_response(json.dumps(data),"stop",blocks,18)
+        self.assertEqual(raised.exception.rule,"figure_caption")
+        blocks,data=self.fixture()
+        with self.assertRaises(LayoutFailure): parse_response(json.dumps(data),"stop",blocks,0)
+
+    def test_invalid_crops_still_rejected(self):
+        for bbox in [[0,0,0,1],[-1,0,1,1],[0,0,2,1],[False,0,1,1],[0,0,float("nan"),1],None]:
+            blocks,data=self.fixture();data["figures"][0]["bbox"]=bbox
+            with self.assertRaises(LayoutFailure) as raised: parse_response(json.dumps(data),"stop",blocks,18)
+            self.assertEqual(raised.exception.rule,"figure_bbox")
+
+    def test_model_shape_and_truncation_errors_are_controlled(self):
+        blocks,data=self.fixture()
+        cases=[("not json","stop","invalid_json"),(json.dumps(data),"length","output_truncated"),("[]","stop","invalid_structure"),('{"blocks":null}',"stop","invalid_structure"),('{"blocks":[]}',"stop","block_coverage")]
+        for content,reason,rule in cases:
+            with self.subTest(rule=rule):
+                with self.assertRaises(LayoutFailure) as raised: parse_response(content,reason,blocks,18)
+                self.assertEqual(raised.exception.rule,rule)
+                self.assertIn("16",str(raised.exception))
+        for labels in [[{"id":[],"type":"caption"}],[{"id":209,"type":[]}],[{"id":209,"type":"heading","level":True}]]:
+            with self.assertRaises(LayoutFailure): validate(blocks,{"blocks":labels})
+
+    def test_safe_failure_feedback_and_diagnostics(self):
+        blocks,_=self.fixture("secret body API_KEY=never-log-this")
+        stream=io.StringIO()
+        with redirect_stderr(stream): message=failure_message(LayoutFailure("figure_caption",blocks,209))
+        self.assertIn("无法识别图注编号",message)
+        self.assertIn("16",message)
+        self.assertNotIn("HTTP n/a",message)
+        record=json.loads(stream.getvalue().removeprefix("RDLOG "))
+        self.assertEqual(record["event"],"LAYOUT_VALIDATION_FAILED")
+        self.assertEqual(record["attributes"]["blockId"],209)
+        self.assertEqual(record["attributes"]["rule"],"figure_caption")
+        self.assertNotIn("secret",message+stream.getvalue())
+        self.assertEqual(failure_message(ValueError("private response")),"ValueError")
+        error=RuntimeError("private response");error.status_code=429
+        self.assertEqual(failure_message(error),"RuntimeError（HTTP 429）")
 
 if __name__=='__main__': unittest.main()

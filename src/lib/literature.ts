@@ -127,6 +127,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 const tauriLit = {
+  chooseNewSource: () => call<string | null>("choose_new_paper_source"),
+  createWithFile: (input: PaperInput, srcPath: string) => call<[Paper, PaperFile]>("create_paper_with_file", {input, srcPath}),
   cloudReady: () => call<boolean>("literature_cloud_ready"),
   chooseFile: (paperId: string) => call<PaperFile | null>("choose_paper_file", { paperId }),
   listNodes: () => call<LibraryNode[]>("list_library_nodes"),
@@ -299,6 +301,15 @@ function previewLit() {
       });
     },
 
+    chooseNewSource: async (): Promise<string | null> => { throw new Error("请在桌面应用中选择附件"); },
+    createWithFile: async (input: PaperInput, srcPath: string): Promise<[Paper, PaperFile]> => {
+      if (!srcPath.trim()) throw new Error("请选择附件");
+      if (input.id) throw new Error("新建文献不能指定已有条目");
+      const backend = previewLit();
+      const paper = await backend.savePaper(input);
+      try { return [paper, await backend.importFile({paperId: paper.id, srcPath})]; }
+      catch (error) { await backend.deletePaper(paper.id); throw error; }
+    },
     chooseFile: async (_paperId: string): Promise<PaperFile | null> => { throw new Error("请在桌面应用中选择附件"); },
     listFiles: async () => read().files ?? [],
     importFile: async (input: { paperId: string; srcPath: string; role?: string }) => {
