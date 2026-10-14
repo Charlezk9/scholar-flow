@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "RunningDO",
+  "productName": "ScholarFlow",
   "version": "1.5.1",
   "identifier": "com.charlezk9.runningdo",
   "build": {
@@ -14,7 +14,7 @@
       {
         "label": "main",
         "dragDropEnabled": false,
-        "title": "RunningDO",
+        "title": "ScholarFlow",
         "width": 1240,
         "height": 840,
         "minWidth": 1040,

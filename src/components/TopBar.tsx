@@ -13,7 +13,7 @@ function LiveNow() {
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
   useEffect(() => {
-    document.title = `${time} · RunningDO`;
+    document.title = `${time} · ScholarFlow`;
   }, [time]);
 
   return (
@@ -35,7 +35,7 @@ export default function TopBar() {
 
   return (
     <header className="topbar" data-tauri-drag-region>
-      <div className="brand">RunningDO</div>
+      <div className="brand">ScholarFlow</div>
       <button
         className="topbar-date"
         onClick={() => {

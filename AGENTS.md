@@ -1,4 +1,4 @@
-# RunningDO · 开发约定
+# ScholarFlow · 开发约定
 
 ## 1. 红线：PRD 内容不得超出用户输入
 
@@ -40,3 +40,16 @@
 - 浮层必须 `createPortal` 到 `document.body`；动效不得残留 `transform`（会成为 `fixed` 后代的包含块），不用 `grid-template-rows` 过渡（基线 macOS 11 / Safari 14）。
 - 文字容器只用 `min-height`，每条 `font-size` 乘 `--font-scale` —— 有源码审计断言盯着，改动必须过 `pnpm test`。
 - 判定「谁让位」要写死（flex/grid 不声明收缩就会一起变形）。
+
+## 4. Git 分支规范（main / develop）
+
+- 远程仓库：`git@github.com:Charlezk9/scholar-flow.git`，远程名 `origin`。
+- `main`：稳定分支，只接收经过验证的 `develop` 合并；不直接进行日常开发。
+- `develop`：默认开发分支，功能、修复和文档修改统一在此提交；采用两条长期分支，不要求额外 feature / release 分支。
+- 开始工作前检查 `git status` 和当前分支；保留已有未提交改动。远程分支存在时先 fetch，再以 `pull --ff-only` 同步；出现分叉先检查差异。
+- 提交保持单一目的，建议使用 `feat:`、`fix:`、`docs:`、`refactor:`、`chore:` 前缀；只暂存本次修改，不混入无关文件、密钥和构建产物。
+- 发布前在 `develop` 完成相关检查（代码改动执行 `pnpm check`、`cargo test --manifest-path src-tauri/Cargo.toml`），并按文档纪律更新规格和发布记录。
+- 发布时将 `develop` 通过 PR 或本地 `git merge --no-ff develop` 合入 `main`；随后将 `main` 合回 `develop` 并回到 `develop` 继续工作。发布标签使用 `vX.Y.Z`，仅在实际发布时创建。
+- 不强推、不重写共享历史、不擅自删除分支；提交、推送、合并和发布按用户授权范围执行。
+
+更名兼容：产品与构建名为 ScholarFlow；`com.charlezk9.runningdo`、`runningdo.db`、`~/.config/runningdo/` 和已有存储键保留，用于延续现有数据。

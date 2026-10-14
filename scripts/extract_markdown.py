@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RunningDO · 论文 → Markdown 提取器（v1.4 · LIT-07 / LIT-08 / LIT-10）
+"""ScholarFlow · 论文 → Markdown 提取器（v1.4 · LIT-07 / LIT-08 / LIT-10）
 
 两种引擎：
   fast  —— 本地快线：PyMuPDF 取文本层，按页拼 Markdown（离线、秒级、零成本）

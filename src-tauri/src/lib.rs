@@ -34,17 +34,17 @@ pub fn run() {
             app.manage(std::sync::Arc::new(db));
 
             // ---------- 菜单栏常驻（MAC-04） ----------
-            let open_i = MenuItem::with_id(app, "open", "打开 RunningDO", true, None::<&str>)?;
+            let open_i = MenuItem::with_id(app, "open", "打开 ScholarFlow", true, None::<&str>)?;
             let new_cd = MenuItem::with_id(app, "new_countdown", "新建倒计时", true, None::<&str>)?;
             let new_ev = MenuItem::with_id(app, "new_event", "新建事件", true, None::<&str>)?;
             let today = MenuItem::with_id(app, "today", "回到今天", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
-            let quit = MenuItem::with_id(app, "quit", "退出 RunningDO", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "退出 ScholarFlow", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_i, &new_cd, &new_ev, &today, &sep, &quit])?;
 
             let mut builder = TrayIconBuilder::with_id("main-tray")
                 .menu(&menu)
-                .tooltip("RunningDO");
+                .tooltip("ScholarFlow");
             if let Some(icon) = app.default_window_icon() {
                 builder = builder.icon(icon.clone()).icon_as_template(true);
             }
@@ -138,5 +138,5 @@ pub fn run() {
             commands::extract_paper_markdown,
         ])
         .run(tauri::generate_context!())
-        .expect("RunningDO 启动失败");
+        .expect("ScholarFlow 启动失败");
 }

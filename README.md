@@ -1,4 +1,8 @@
-# RunningDO
+# ScholarFlow
+
+原名 RunningDO。仓库：`git@github.com:Charlezk9/scholar-flow.git`。日常开发使用 `develop`，稳定版本使用 `main`，规则见 [AGENTS.md](AGENTS.md)。
+
+更名保留原应用标识、数据库与配置路径，已有数据继续使用。
 
 > 一张纸上的科研学习工作台 · macOS 桌面应用
 
@@ -240,7 +244,7 @@ pnpm build
 ## 目录结构
 
 ```
-RunningDO/
+ScholarFlow/
 ├─ docs/
 │  ├─ DEVLOG.md                 # 开发日志（过程视角）
 │  ├─ v0/{PRD.md, DESIGN.md}    # 需求与设计规范（持续更新）

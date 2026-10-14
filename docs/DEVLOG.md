@@ -1,4 +1,15 @@
-# RunningDO 开发日志
+# ScholarFlow 开发日志
+
+## 2026-10-14 · 更名后重新构建
+
+确认旧 debug 应用包仍为 RunningDO；源码已完成更名。重新执行 `pnpm check`、Rust 测试（52 项通过）和 `pnpm tauri build`，生成 `src-tauri/target/release/bundle/macos/ScholarFlow.app`，核验包名、可执行文件名、兼容应用标识及 ad-hoc 签名。构建产物留在项目内，未安装到 `/Applications`。本次更名提交不包含未跟踪的测试 PDF。
+
+## 2026-10-13 · 项目更名与分支规范
+
+项目、界面与构建名称改为 ScholarFlow，保留原应用标识、数据库、配置路径及存储键，延续已有数据。配置 GitHub origin，采用 main 稳定分支与 develop 开发分支；规则写入 AGENTS.md。历史记录保留当时名称。
+
+验证：`pnpm check`、`pnpm build` 与 Rust 测试通过；目录更名使 Tauri 缓存引用旧绝对路径，清理相关包缓存后恢复。SSH 访问成功，远程为空；当前为本地 develop，未提交或推送。
+
 
 > 文档分工（完整规则见 [PRD §0](./v0/PRD.md)）：
 > - `docs/v0/PRD.md` —— **需求**：唯一活规格 + §5.0 状态总览。**任何功能开发先改它**
