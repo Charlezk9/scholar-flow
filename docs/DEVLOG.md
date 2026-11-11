@@ -1,5 +1,11 @@
 # ScholarFlow 开发日志
 
+## 2026-11-11 · 日历重复事件核查与规划
+
+按用户要求核查事件抽屉、日期查询、布局、持久化及 Git 进度；现有 repeatRule / repeatUntil 仅为存储预留，尚无表单配置和实例展开链路。先在 PRD 登记 EV-14 每周重复事件、EV-15 每年重复生日，再形成 `docs/v1/PLAN-v1.x-recurring-events.md`，列明源码证据、主事件与实例分离方案、实施顺序、验证门槛及待确认决策。需求状态只见 PRD §5.0。
+
+本轮为文档规划，未实现功能、未修改版本、未安装或发布应用；未重跑代码测试或实机验收。fetch / pull --ff-only 核对 develop 与远端一致，仅提交本轮文档差异，保留文献阅读、翻译及其他既有未提交改动。
+
 ## 2026-10-14 · 更名后重新构建
 
 确认旧 debug 应用包仍为 RunningDO；源码已完成更名。重新执行 `pnpm check`、Rust 测试（52 项通过）和 `pnpm tauri build`，生成 `src-tauri/target/release/bundle/macos/ScholarFlow.app`，核验包名、可执行文件名、兼容应用标识及 ad-hoc 签名。构建产物留在项目内，未安装到 `/Applications`。本次更名提交不包含未跟踪的测试 PDF。
